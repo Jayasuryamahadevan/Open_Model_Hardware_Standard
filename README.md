@@ -393,14 +393,24 @@ Instrument libraries are optional extras, one per protocol. A driver whose
 vendor library is missing is reported as unavailable, with the extra needed to
 install it; a lab with no hardware attached still starts.
 
+Install this repository with Python 3.11 or newer. The `labbench` name on
+[PyPI](https://pypi.org/project/labbench/) belongs to a different project,
+so install from this checkout in an isolated environment. The commands below
+use a POSIX shell and leave you at the repository root for the config paths
+in the examples.
+
 ```bash
-pip install labbench              # gateway + simulated instruments
-pip install 'labbench[scpi]'      # + oscilloscopes, power supplies, DMMs
-pip install 'labbench[micromanager]'  # + Micro-Manager microscopes (pymmcore-plus)
-pip install 'labbench[opcua]'     # + OPC UA LADS devices (asyncua)
-pip install 'labbench[sila2]'     # + SiLA 2 servers
-pip install 'labbench[http]'      # + WoT Things and Opentrons robots (httpx)
-pip install 'labbench[all]'       # + every supported protocol
+git clone https://github.com/Jayasuryamahadevan/Open_Model_Hardware_Standard.git
+cd Open_Model_Hardware_Standard
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .          # gateway + simulated instruments
+python -m pip install -e '.[scpi]'      # + oscilloscopes, power supplies, DMMs
+python -m pip install -e '.[micromanager]'  # + Micro-Manager microscopes (pymmcore-plus)
+python -m pip install -e '.[opcua]'     # + OPC UA LADS devices (asyncua)
+python -m pip install -e '.[sila2]'     # + SiLA 2 servers
+python -m pip install -e '.[http]'      # + WoT Things and Opentrons robots (httpx)
+python -m pip install -e '.[all]'       # + every supported protocol
 ```
 
 ---
