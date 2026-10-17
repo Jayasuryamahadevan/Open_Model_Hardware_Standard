@@ -248,6 +248,21 @@ async def _doctor(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+# -- analyze ---------------------------------------------------------------
+
+
+async def _analyze(args: argparse.Namespace) -> int:
+    from .gateway import Gateway
+
+    gateway = Gateway(_load_config(args.config), data_dir=args.data_dir)
+    await gateway.start()
+    try:
+        _emit(await gateway.analyze_hardware())
+        return 0
+    finally:
+        await gateway.close()
+
+
 # -- devices ---------------------------------------------------------------
 
 
@@ -626,6 +641,12 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = sub.add_parser("doctor", parents=[common], help="Check the installation and a config.")
     doctor.add_argument("-c", "--config", default=None)
     doctor.set_defaults(func=_doctor)
+
+    analyze = sub.add_parser(
+        "analyze", parents=[common], help="Report hardware endpoints and safe MCP controls."
+    )
+    analyze.add_argument("-c", "--config", default=None)
+    analyze.set_defaults(func=_analyze)
 
     devices = sub.add_parser("devices", parents=[common], help="List instruments and their capabilities.")
     devices.add_argument("-c", "--config", required=True)
