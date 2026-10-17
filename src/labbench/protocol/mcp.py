@@ -20,7 +20,15 @@ from .stdio import StdioServer
 MODERN_VERSION = "2026-07-28"
 LEGACY_VERSIONS = ("2025-11-25", "2025-06-18", "2024-11-05")
 SUPPORTED_VERSIONS = (MODERN_VERSION, *LEGACY_VERSIONS)
-CACHEABLE_METHODS = {"tools/list", "resources/list", "resources/read", "prompts/list"}
+CACHEABLE_METHODS = {"server/discover", "tools/list", "resources/list", "resources/read",
+                     "prompts/list", "prompts/get"}
+CORE_TOOLS = frozenset({
+    "hardware.analyze", "hardware.manual", "hardware.activate",
+    "lab.describe", "lab.find", "lab.snapshot",
+    "device.describe", "device.manuals", "device.manual", "device.read",
+    "device.simulate", "device.invoke", "device.initialize",
+    "job.status", "job.wait", "job.cancel", "estop",
+})
 
 
 class McpRouter(Router):
@@ -34,9 +42,7 @@ class McpRouter(Router):
         declared = (meta.get("io.modelcontextprotocol/protocolVersion")
                     if isinstance(meta, dict) else None)
         if declared is not None and declared not in SUPPORTED_VERSIONS:
-            from .jsonrpc import Response
-
-            return Response.fail(request.id, JsonRpcError(
+                return Response.fail(request.id, JsonRpcError(
                 -32022, "Unsupported protocol version",
                 {"supported": list(SUPPORTED_VERSIONS), "requested": declared},
             ))
@@ -103,10 +109,15 @@ def _device_tools(gateway: Any) -> dict[str, tuple[ToolSpec, str, str, str]]:
     return out
 
 
-def mcp_router(gateway: Any) -> Router:
-    """Build an MCP endpoint with stable tool names and live device resources."""
+def mcp_router(gateway: Any, *, profile: str = "core") -> Router:
+    """Expose a concise default tool catalog; opt in to full workflow tooling."""
+    if profile not in ("core", "full"):
+        raise ValueError("MCP profile must be core or full")
     router = McpRouter()
-    specs = tool_specs(gateway)
+    all_specs = tool_specs(gateway)
+    specs = all_specs if profile == "full" else [
+        spec for spec in all_specs if spec.name in CORE_TOOLS
+    ]
     by_name = {spec.wire_name(): spec for spec in specs}
     if len(by_name) != len(specs):
         raise ValueError("MCP tool names collide after sanitisation")
@@ -250,8 +261,8 @@ def mcp_router(gateway: Any) -> Router:
     return router
 
 
-async def serve_mcp_stdio(gateway: Any) -> None:
-    server = StdioServer(mcp_router(gateway), actor="agent:mcp")
+async def serve_mcp_stdio(gateway: Any, *, profile: str = "core") -> None:
+    server = StdioServer(mcp_router(gateway, profile=profile), actor="agent:mcp")
 
     async def on_gateway_event(topic: str, payload: dict[str, Any]) -> None:
         if topic == "tools.list_changed":
