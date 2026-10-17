@@ -1,0 +1,36 @@
+name: Hardware certification (operator only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_id:
+        description: Exact ID of the single device attached to the HIL runner
+        required: true
+        type: string
+      config_path:
+        description: Absolute path to an operator-reviewed config on the HIL runner
+        required: true
+        type: string
+      operator_ack:
+        description: I am present, the setup is safe, and I approve read-only identity/telemetry
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  read-only-preflight:
+    if: ${{ inputs.operator_ack == true }}
+    runs-on: [self-hosted, linux, hcp-hil]
+    environment: hardware-lab
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: uv sync --extra all --extra dev
+      - name: Read-only physical identity and telemetry
+        env:
+          HCP_HIL_CONFIG: ${{ inputs.config_path }}
+          HCP_HIL_DEVICE_ID: ${{ inputs.device_id }}
+          HCP_HIL_OPERATOR_ACK: READ_ONLY_ON_PHYSICAL_HARDWARE
+        run: uv run pytest -q tests/hil/test_read_only_preflight.py
