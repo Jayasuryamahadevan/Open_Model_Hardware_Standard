@@ -11,8 +11,8 @@ from typing import Any
 
 from .. import __version__
 from ..bridge.schema import ToolSpec
-from ..core.analysis import mcp_control_name
 from ..bridge.toolset import tool_specs
+from ..core.analysis import mcp_control_name
 from .jsonrpc import INVALID_PARAMS, JsonRpcError, Request
 from .router import Router, RpcContext
 from .stdio import StdioServer
