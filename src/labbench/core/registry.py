@@ -18,8 +18,8 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .device import Device, DeviceDescriptor, DeviceState
-from .network_discovery import NetworkTarget
 from .errors import DeviceNotFound, DriverUnavailable
+from .network_discovery import NetworkTarget
 
 ENTRY_POINT_GROUP = "labbench.drivers"
 
