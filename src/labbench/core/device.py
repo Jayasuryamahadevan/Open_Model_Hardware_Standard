@@ -405,6 +405,9 @@ class Device(abc.ABC):
             else:
                 result = await self._invoke(feature, command, clean, ctx)
             return result if isinstance(result, dict) else {"value": result}
+        except asyncio.CancelledError:
+            await self.fail(f"{feature}.{command} cancelled; physical state uncertain")
+            raise
         except LabBenchError as exc:
             self._last_error = exc
             if exc.state_uncertain:
