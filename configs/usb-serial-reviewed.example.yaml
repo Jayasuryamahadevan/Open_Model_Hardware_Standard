@@ -1,0 +1,32 @@
+# TEMPLATE ONLY: replace with verified details from your device programming manual.
+name: reviewed-usb-bench
+devices:
+  - id: usb_meter
+    driver: serial_ascii
+    kind: multimeter
+    expected_identity: {serial: "EXAMPLE-SERIAL"}
+    settings:
+      port: "/dev/ttyACM0"
+      usb_identity:
+        vid: 4660
+        pid: 22136
+        serial_number: "EXAMPLE-SERIAL"
+      baudrate: 9600
+      timeout_s: 1
+      terminator: "\\n"
+      identity_query: "*IDN?"
+      identity_reply: "EXAMPLE,METER,EXAMPLE-SERIAL"
+      features:
+        - identifier: Measurement
+          properties:
+            - name: reading
+              query: "MEAS?"
+              schema: {name: reading, type: string}
+          commands:
+            - name: measure
+              frame: "MEAS?"
+              hazard: none
+              reversibility: reversible
+              simulatable: false
+safety:
+  autonomy: 0
