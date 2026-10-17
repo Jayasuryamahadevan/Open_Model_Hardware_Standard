@@ -88,9 +88,9 @@ def _probe(target: NetworkTarget) -> dict[str, Any]:
                 raise ValueError("identity exceeds 4 KiB")
         value = json.loads(raw)
         if not isinstance(value, dict):
-            raise ValueError("identity must be a JSON object")
+            raise TypeError("identity must be a JSON object")
         return {key: value.get(key) for key in ("vendor", "model", "serial", "firmware")}
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError, UnicodeError) as exc:
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, TypeError, UnicodeError) as exc:
         return {"error": f"{type(exc).__name__}: {exc}"}
 
 
