@@ -31,9 +31,16 @@ class McpRouter(Router):
 
         params = request.params
         meta = params.get("_meta", {}) if isinstance(params, dict) else {}
-        modern = isinstance(meta, dict) and (
-            meta.get("io.modelcontextprotocol/protocolVersion") == MODERN_VERSION
-        )
+        declared = (meta.get("io.modelcontextprotocol/protocolVersion")
+                    if isinstance(meta, dict) else None)
+        if declared is not None and declared not in SUPPORTED_VERSIONS:
+            from .jsonrpc import Response
+
+            return Response.fail(request.id, JsonRpcError(
+                -32022, "Unsupported protocol version",
+                {"supported": list(SUPPORTED_VERSIONS), "requested": declared},
+            ))
+        modern = declared == MODERN_VERSION
         if modern:
             if not isinstance(meta.get("io.modelcontextprotocol/clientCapabilities"), dict):
                 return Response.fail(request.id, JsonRpcError(
