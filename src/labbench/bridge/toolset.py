@@ -39,6 +39,11 @@ def register_tools(router: Router, gateway: Any) -> None:
         """Identify connections and compare them with reviewed binding rules."""
         return await gateway.analyze_hardware()
 
+    @router.method("hardware.analyze")
+    async def hardware_analyze() -> dict[str, Any]:
+        """Inventory host endpoints, drivers, schemas and activation readiness."""
+        return await gateway.analyze_hardware()
+
     @router.method("hardware.activate")
     async def hardware_activate(rule_id: str, ctx: RpcContext) -> dict[str, Any]:
         """Attach a previously analyzed exact identity match as a live device."""
@@ -816,6 +821,17 @@ def tool_specs(gateway: Any) -> list[ToolSpec]:
     device_arg = {"type": "string", "description": f"Device id.{device_hint}"}
 
     return [
+        ToolSpec(
+            name="hardware.analyze",
+            description="FIRST STEP for a newly connected MCP client. Inspect host USB, "
+                        "serial, VISA and explicitly permitted SCPI interfaces without "
+                        "actuating them. Report observed endpoints, verified bindings, "
+                        "configured devices and the exact control schemas that the "
+                        "MCP and JSON-RPC gateways can expose. Unknown devices remain "
+                        "inventory-only and are never automatically activated.",
+            parameters=obj({}), read_only=True, idempotent=True, hazard="none",
+            tags=["discovery", "analysis"],
+        ),
         ToolSpec(
             name="hardware.discover",
             description="Read-only laptop discovery: USB vendor/product/serial descriptors and "

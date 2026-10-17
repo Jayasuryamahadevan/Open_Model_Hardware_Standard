@@ -6,13 +6,13 @@ router and its safety kernel; this module has no direct device access.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from typing import Any
 
 from .. import __version__
-from ..bridge.schema import ToolSpec, sanitise_name
+from ..bridge.schema import ToolSpec
 from ..bridge.toolset import tool_specs
+from ..core.analysis import mcp_control_name
 from .jsonrpc import INVALID_PARAMS, JsonRpcError, Request
 from .router import Router, RpcContext
 from .stdio import StdioServer
@@ -31,8 +31,7 @@ def _device_tools(gateway: Any) -> dict[str, tuple[ToolSpec, str, str, str]]:
                 if "raw" in command.tags:
                     continue  # the escape hatch is not advertised as a safe device control
                 identity = f"{device_id}.{feature.identifier}.{command.name}"
-                suffix = hashlib.sha256(identity.encode()).hexdigest()[:8]
-                name = f"hcp_{sanitise_name(identity)[:50]}_{suffix}"
+                name = mcp_control_name(device_id, feature.identifier, command.name)
                 schema = {"type": "object", "properties": {
                     "args": command.input_schema(),
                     "reason": {"type": "string", "description": "Reason for this action."},
@@ -68,7 +67,7 @@ def mcp_router(gateway: Any) -> Router:
                              "prompts": {"listChanged": False}},
             "serverInfo": {"name": "labbench-hcp", "version": __version__},
             "instructions": (
-                "Start with lab_describe and hardware_discover. For a matched reviewed "
+                "Start with hardware_analyze, then lab_describe. For a matched reviewed "
                 "binding, read its manual then call hardware_activate; the tool list will "
                 "gain typed controls for that device. "
                 "Use device_simulate before physical actions. Unknown hardware is only an "
@@ -172,7 +171,7 @@ def mcp_router(gateway: Any) -> Router:
         if name != "inspect-hardware":
             raise JsonRpcError(INVALID_PARAMS, f"unknown prompt {name!r}")
         return {"messages": [{"role": "user", "content": {"type": "text", "text":
-            "Discover the hardware, report identity evidence and confidence, then read "
+            "Call hardware_analyze first. Report observed endpoints and their evidence, then read "
             "device descriptions and manuals. Do not infer commands from a model name. "
             "For a requested physical action, simulate it and call the declared command "
             "through the gateway; stop if the driver or safety policy cannot authorize it."}}]}

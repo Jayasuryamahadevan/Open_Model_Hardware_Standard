@@ -13,7 +13,22 @@ uv sync --extra dev
 uv run labbench serve -c configs/simulated-arm.yaml -t mcp
 ```
 
-The last command speaks MCP JSON-RPC on stdin/stdout. It waits for an MCP client
+Before connecting an agent, inspect the host without asking it to actuate anything:
+
+```bash
+uv run labbench analyze -c configs/simulated-arm.yaml
+```
+
+This outputs a JSON report containing the observed USB, serial, VISA and explicitly
+configured SCPI addresses, the evidence supporting their identities, reviewed
+activation bindings, active driver capabilities, JSON Schemas, and the exact
+typed MCP tool names. An observed USB descriptor is not a control protocol.
+Unrecognized devices remain inventory-only. The command does not send motion
+or configuration commands, but configured instruments can be opened during
+normal gateway startup and explicit SCPI targets receive the read-only
+`*IDN?` identity query.
+
+The last `serve` command speaks MCP JSON-RPC on stdin/stdout. It waits for an MCP client
 to launch it; running it at an ordinary terminal is not useful. Configure a
 stdio MCP client with an absolute path to the installed `labbench` executable
 and absolute paths for the config and data directory. For example, in an MCP
@@ -33,7 +48,7 @@ client's `mcpServers` configuration:
 ```
 
 Ask the client to discover the arm and make it wave hello. The intended tool
-sequence is `hardware_discover`, `device_describe`, `device_manual`,
+sequence is `hardware_analyze`, `device_describe`, `device_manual`,
 `device_simulate`, `device_invoke` with `home`, `device_simulate` with `wave`,
 `device_invoke` with `wave`, and `device_read`. The arm is simulated; no motor
 will move. The same stable MCP tools work for every configured instrument.
@@ -102,3 +117,84 @@ connections and speak to supported protocols, but an unknown proprietary
 protocol cannot be safely inferred from a cable or a PDF alone. New device
 families need a driver, and each installation needs validated limits and an
 effective physical emergency stop.
+
+## Claude Desktop and OpenCode (local MCP)
+
+Install the project into a virtual environment first. The executable and
+configuration paths should be absolute; replace the sample paths with the
+real checkout path. On Windows, use `.venv\\Scripts\\labbench.exe`.
+
+Claude Desktop `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "hardware-context-protocol": {
+      "command": "/absolute/path/to/Hardware-context-protocol/.venv/bin/labbench",
+      "args": [
+        "--data-dir", "/absolute/path/to/hcp-data",
+        "serve", "-c",
+        "/absolute/path/to/Hardware-context-protocol/configs/simulated-arm.yaml",
+        "--transport", "mcp"
+      ]
+    }
+  }
+}
+```
+
+OpenCode `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "hardware-context-protocol": {
+      "type": "local",
+      "command": [
+        "/absolute/path/to/Hardware-context-protocol/.venv/bin/labbench",
+        "--data-dir", "/absolute/path/to/hcp-data",
+        "serve", "-c",
+        "/absolute/path/to/Hardware-context-protocol/configs/simulated-arm.yaml",
+        "--transport", "mcp"
+      ],
+      "enabled": true
+    }
+  }
+}
+```
+
+Restart the MCP client after editing its configuration. Ask the agent to call
+`hardware_analyze` **first** and show the `analysis.endpoints`,
+`analysis.devices` and `analysis.summary` sections. The client calls
+`tools/list` to learn what it may invoke; after `hardware_activate`
+connects a reviewed device, the gateway publishes
+`notifications/tools/list_changed` and the newly generated
+`hcp_<device>_<feature>_<command>_<hash>` tool names become available.
+
+The alternative stable tool `device_invoke` works with an explicit device ID,
+feature ID, command ID, and validated arguments. Both paths reach the same
+safety policy, human approval checks, and audit log. A tool name being visible
+does **not** grant permission to bypass those checks.
+
+The `-t mcp` transport is MCP **stdio** and is intended for local clients.
+`-t http` serves the project's own JSON-RPC gateway API; it is **not** an
+MCP Streamable HTTP endpoint. Don't configure that native HTTP address as a
+remote MCP URL. For a remote deployment, add and secure an MCP-compliant
+transport separately rather than exposing the local stdio service.
+
+## Control eligibility
+
+| Connection | Analysis evidence | Conditions for control |
+| --- | --- | --- |
+| USB, HID, serial | OS descriptors, port names | Installed driver with verified command framing and safety model |
+| VISA and SCPI | Resource address; `*IDN?` only for approved targets | Verified exact identity, reviewed profile and driver |
+| W3C Web of Things | Operator-configured Thing Description | Validated adapter, declared affordances and site safety policy |
+| OPC UA LADS and SiLA 2 | Driver-browsed features | Connected driver and approved site-specific hazard limits |
+| Micro-Manager | Installed hardware configuration | Driver matches the physical instrument configuration |
+| Opentrons | Vendor API and robot run state | Installed vendor adapter and appropriate robot permissions |
+
+Do not infer motion ranges, voltage limits, chemical/biological controls or
+emergency-stop behavior from USB IDs, product names, HTTP paths or LLM output.
+Only remotely controllable hardware with a supported host interface is in
+scope. Mechanical safety interlocks and a tested physical emergency stop
+remain mandatory for real actuators.

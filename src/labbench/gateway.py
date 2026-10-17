@@ -229,6 +229,8 @@ class Gateway:
                 reason = observed["error"]
             elif mismatches:
                 reason = f"identity mismatch in {', '.join(mismatches)}"
+            elif not rule.serial:
+                reason = "a reviewed SCPI binding requires an exact serial number"
             elif rule.profile not in PROFILES or rule.profile == "generic":
                 reason = f"profile {rule.profile!r} is not a reviewed built-in profile"
             elif rule.id in self.devices.all():
@@ -248,6 +250,12 @@ class Gateway:
              "state": dev.state.value}
             for dev in self.devices.all().values()
         ]
+        from .core.analysis import build_analysis
+
+        inventory["analysis"] = build_analysis(
+            inventory, self.devices.all(), self.devices.quarantined,
+            {cfg.id: cfg for cfg in self.config.devices},
+        )
         return inventory
 
     async def activate_hardware(self, rule_id: str, *, actor: str) -> dict[str, Any]:
