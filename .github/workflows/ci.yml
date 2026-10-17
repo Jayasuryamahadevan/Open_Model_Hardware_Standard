@@ -38,7 +38,7 @@ jobs:
         run: uv sync --extra dev --extra all
 
       - name: Lint
-        run: uv run ruff check src tests examples
+        run: uv run ruff check src tests examples --diff
 
       - name: Test
         run: uv run pytest --verbose
