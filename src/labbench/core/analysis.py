@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import platform
 from typing import Any, Mapping
+from urllib.parse import urlsplit, urlunsplit
 
 from ..bridge.schema import sanitise_name
 from .device import Device
@@ -40,10 +41,36 @@ def _endpoint(
     }
 
 
+def _configured_endpoint(config: Any) -> dict[str, str] | None:
+    settings = config.settings
+    value = next((settings[key] for key in (
+        "endpoint_url", "td_url", "base_url", "url", "address"
+    ) if isinstance(settings.get(key), str) and settings[key]), None)
+    if value is None and isinstance(settings.get("host"), str):
+        value = settings["host"]
+        if settings.get("port") is not None:
+            value = f"{value}:{settings['port']}"
+    if value is None:
+        return None
+    if "://" in value:
+        parts = urlsplit(value)
+        if parts.hostname:
+            netloc = parts.hostname
+            if ":" in netloc:
+                netloc = f"[{netloc}]"
+            if parts.port is not None:
+                netloc += f":{parts.port}"
+            value = urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+        else:
+            return None
+    return {"driver": config.driver, "address": value, "origin": "operator_configuration"}
+
+
 def build_analysis(
     inventory: dict[str, Any],
     devices: Mapping[str, Device],
     quarantined: Mapping[str, str],
+    configs: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create a report without opening ports or invoking hardware commands."""
     endpoints: list[dict[str, Any]] = []
@@ -129,6 +156,8 @@ def build_analysis(
             "descriptor": device.descriptor.model_dump(mode="json"),
             "state": device.state.value,
             "quarantine_reason": quarantined.get(device_id),
+            "configured_endpoint": _configured_endpoint(configs[device_id])
+            if configs and device_id in configs else None,
             "controllable": eligible,
             "features": features,
         })
