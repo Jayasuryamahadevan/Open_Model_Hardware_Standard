@@ -20,6 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 micromanager = ["pymmcore-plus>=0.13", "useq-schema>=0.5"]
 scpi         = ["pyvisa>=1.14", "pyvisa-py>=0.7"]
+serial       = ["pyserial>=3.5"]
 sila2        = ["sila2>=0.10"]
 opcua        = ["asyncua>=1.1"]
 epics        = ["ophyd-async>=0.5", "bluesky>=1.13"]
@@ -28,7 +29,7 @@ http         = ["httpx>=0.27"]
 imaging      = ["tifffile>=2024.1", "imageio>=2.34"]
 manuals      = ["pypdf>=5.0"]
 dev          = ["pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.6"]
-all          = ["labbench[micromanager,scpi,sila2,opcua,discovery,http,imaging]"]
+all          = ["labbench[micromanager,scpi,serial,sila2,opcua,discovery,http,imaging]"]
 
 [project.scripts]
 labbench = "labbench.cli:main"
@@ -46,6 +47,7 @@ sila2              = "labbench.drivers.sila2_adapter:Sila2Device"
 opcua_lads         = "labbench.drivers.opcua_lads:LadsDevice"
 opentrons          = "labbench.drivers.opentrons:OpentronsRobot"
 http_api           = "labbench.drivers.http_api:HttpApiDevice"
+serial_ascii       = "labbench.drivers.serial_ascii:SerialAsciiDevice"
 
 [project.entry-points."labbench.memory"]
 sqlite     = "labbench.memory.sqlite_store:SqliteMemory"

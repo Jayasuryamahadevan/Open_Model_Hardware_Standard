@@ -17,7 +17,60 @@ from .jsonrpc import INVALID_PARAMS, JsonRpcError, Request
 from .router import Router, RpcContext
 from .stdio import StdioServer
 
-SUPPORTED_VERSIONS = ("2026-07-28", "2025-11-25", "2025-06-18", "2024-11-05")
+MODERN_VERSION = "2026-07-28"
+LEGACY_VERSIONS = ("2025-11-25", "2025-06-18", "2024-11-05")
+SUPPORTED_VERSIONS = (MODERN_VERSION, *LEGACY_VERSIONS)
+CACHEABLE_METHODS = {"tools/list", "resources/list", "resources/read", "prompts/list"}
+
+
+class McpRouter(Router):
+    """Translate MCP 2026 stateless envelopes without changing the device gateway."""
+
+    async def dispatch(self, request: Request, ctx: RpcContext) -> Any:
+        from .jsonrpc import Response
+
+        params = request.params
+        meta = params.get("_meta", {}) if isinstance(params, dict) else {}
+        declared = (meta.get("io.modelcontextprotocol/protocolVersion")
+                    if isinstance(meta, dict) else None)
+        if declared is not None and declared not in SUPPORTED_VERSIONS:
+            from .jsonrpc import Response
+
+            return Response.fail(request.id, JsonRpcError(
+                -32022, "Unsupported protocol version",
+                {"supported": list(SUPPORTED_VERSIONS), "requested": declared},
+            ))
+        modern = declared == MODERN_VERSION
+        if modern:
+            if not isinstance(meta.get("io.modelcontextprotocol/clientCapabilities"), dict):
+                return Response.fail(request.id, JsonRpcError(
+                    INVALID_PARAMS, "modern MCP requires per-request clientCapabilities"
+                ))
+            if request.method in ("initialize", "notifications/initialized", "ping"):
+                return Response.fail(request.id, JsonRpcError(
+                    INVALID_PARAMS, "legacy lifecycle methods are unavailable in modern MCP"
+                ))
+            request = Request(
+                request.method,
+                {key: value for key, value in params.items() if key != "_meta"},
+                request.id, is_notification=request.is_notification,
+            )
+        response = await super().dispatch(request, ctx)
+        if modern and response is not None and response.kind == "result":
+            result = response.result
+            if isinstance(result, dict):
+                result = dict(result)
+                result.setdefault("resultType", "complete")
+                result.setdefault("_meta", {}).setdefault(
+                    "io.modelcontextprotocol/serverInfo",
+                    {"name": "labbench-hcp", "version": __version__},
+                )
+                if request.method in CACHEABLE_METHODS:
+                    # Device status and permitted tools can change at any time.
+                    result.update({"ttlMs": 0, "cacheScope": "private"})
+            response = Response.ok(response.id, result)
+        return response
+
 
 
 def _device_tools(gateway: Any) -> dict[str, tuple[ToolSpec, str, str, str]]:
@@ -52,7 +105,7 @@ def _device_tools(gateway: Any) -> dict[str, tuple[ToolSpec, str, str, str]]:
 
 def mcp_router(gateway: Any) -> Router:
     """Build an MCP endpoint with stable tool names and live device resources."""
-    router = Router()
+    router = McpRouter()
     specs = tool_specs(gateway)
     by_name = {spec.wire_name(): spec for spec in specs}
     if len(by_name) != len(specs):
@@ -60,7 +113,7 @@ def mcp_router(gateway: Any) -> Router:
 
     @router.method("initialize")
     async def initialize(protocolVersion: str = "2025-11-25", **_ignored: Any) -> dict[str, Any]:
-        version = protocolVersion if protocolVersion in SUPPORTED_VERSIONS else SUPPORTED_VERSIONS[0]
+        version = protocolVersion if protocolVersion in LEGACY_VERSIONS else LEGACY_VERSIONS[0]
         return {
             "protocolVersion": version,
             "capabilities": {"tools": {"listChanged": True}, "resources": {"listChanged": True},
@@ -74,6 +127,24 @@ def mcp_router(gateway: Any) -> Router:
                 "inventory item until a reviewed driver/profile is configured. "
                 "Every physical action must use device_invoke and obey its approval result."
             ),
+        }
+
+    @router.method("server/discover")
+    async def server_discover() -> dict[str, Any]:
+        return {
+            "supportedVersions": list(SUPPORTED_VERSIONS),
+            "capabilities": {
+                "tools": {"listChanged": False},
+                "resources": {"listChanged": False},
+                "prompts": {"listChanged": False},
+            },
+            "instructions": (
+                "Call hardware_analyze to inspect connected USB and network interfaces. "
+                "Only verified, reviewed adapters expose physical controls; "
+                "use device_simulate and honor safety approvals before acting."
+            ),
+            "ttlMs": 0,
+            "cacheScope": "private",
         }
 
     @router.method("notifications/initialized")
@@ -98,7 +169,7 @@ def mcp_router(gateway: Any) -> Router:
                                 "destructiveHint": spec.destructive,
                                 "idempotentHint": spec.idempotent},
             }
-            for spec in all_specs
+            for spec in sorted(all_specs, key=lambda item: item.wire_name())
         ]}
 
     @router.method("tools/call")
@@ -142,7 +213,7 @@ def mcp_router(gateway: Any) -> Router:
         return {"resources": [
             {"uri": f"hcp://device/{device_id}", "name": device.descriptor.display_name,
              "description": "Identity, state and declared capabilities", "mimeType": "application/json"}
-            for device_id, device in gateway.devices.all().items()
+            for device_id, device in sorted(gateway.devices.all().items())
         ]}
 
     @router.method("resources/read")

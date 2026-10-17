@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .device import Device, DeviceDescriptor, DeviceState
 from .errors import DeviceNotFound, DriverUnavailable
+from .network_discovery import NetworkTarget
 
 ENTRY_POINT_GROUP = "labbench.drivers"
 
@@ -92,6 +93,8 @@ class LabConfig(BaseModel):
     scpi_targets: list[str] = Field(default_factory=list)
     #: Devices may be activated at runtime only after exact identity matching.
     scpi_bindings: list[ScpiBinding] = Field(default_factory=list)
+    #: Explicit local Wi-Fi/LAN endpoints; no network or subnet scanning.
+    network_targets: list[NetworkTarget] = Field(default_factory=list)
     #: Raw safety policy; parsed by labbench.core.safety.SafetyPolicy.
     safety: dict[str, Any] = Field(default_factory=dict)
     memory: list[dict[str, Any]] = Field(default_factory=list)

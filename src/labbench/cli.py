@@ -37,6 +37,7 @@ LOG_FORMAT = "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
 _EXTRA_FOR_DRIVER = {
     "micromanager": "micromanager",
     "scpi": "scpi",
+    "serial_ascii": "serial",
     "sila2": "sila2",
     "opcua_lads": "opcua",
     "wot": "http",
@@ -289,6 +290,18 @@ async def _analyze(args: argparse.Namespace) -> int:
         return 0
     finally:
         await gateway.close()
+
+
+# -- harness ---------------------------------------------------------------
+
+
+async def _harness(args: argparse.Namespace) -> int:
+    from .harness import run_harness
+
+    config = _load_config(args.config) if args.config else None
+    report = await run_harness(config)
+    _emit(report)
+    return 0 if report["passed"] else 1
 
 
 # -- devices ---------------------------------------------------------------
@@ -679,6 +692,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     analyze.add_argument("-c", "--config", default=None)
     analyze.set_defaults(func=_analyze)
+
+    harness = sub.add_parser(
+        "harness", parents=[common], help="Run simulated-only MCP protocol and safety smoke checks."
+    )
+    harness.add_argument("-c", "--config", default=None)
+    harness.set_defaults(func=_harness)
 
     devices = sub.add_parser("devices", parents=[common], help="List instruments and their capabilities.")
     devices.add_argument("-c", "--config", required=True)

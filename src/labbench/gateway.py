@@ -213,6 +213,9 @@ class Gateway:
             [*self.config.scpi_targets, *(rule.address for rule in self.config.scpi_bindings)]
         ))
         inventory = await discover_hardware(targets)
+        from .core.network_discovery import inspect_network_targets
+
+        inventory["network"] = await inspect_network_targets(self.config.network_targets)
         by_address = {item["address"]: item for item in inventory["scpi"]}
         self._analysis.clear()
         bindings = []

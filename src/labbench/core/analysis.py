@@ -145,6 +145,15 @@ def build_analysis(
             ),
         ))
 
+    for item in inventory.get("network", []):
+        endpoints.append(_endpoint(
+            "network-target", item["address"], protocol=item["protocol"],
+            probe=item["probe"],
+            evidence={"identity": item.get("identity"), "reason": item.get("reason")},
+            control_status=item["control_status"],
+            next_step=item["next_step"],
+        ))
+
     configured: list[dict[str, Any]] = []
     tools_available = 0
     for device_id, device in sorted(devices.items()):

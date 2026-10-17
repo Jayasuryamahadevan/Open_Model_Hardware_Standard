@@ -1,5 +1,11 @@
 # LabBench
 
+> **USB / Wi-Fi setup:** [USB and Wi-Fi hardware onboarding](docs/USB-WIFI-ONBOARDING.md)
+> documents Windows/macOS/Linux enumeration, serial and USBTMC devices,
+> private-network identity checks, reviewed driver templates, Claude/OpenCode
+> setup and a simulated-only harness. Run `uv run labbench harness` for
+> protocol smoke checks without touching physical devices.
+>
 > **HCP / MCP quick start:** LabBench now serves a standard local MCP endpoint,
 > analyzes host USB/serial/VISA endpoints, probes only explicitly configured
 > SCPI addresses, and exposes verified capability schemas as MCP tools.
