@@ -41,8 +41,10 @@ class TestLifecycle:
         assert scope.state is DeviceState.FAULT
         assert scope.fault == "simulated hardware fault"
         await scope.clear_fault()
-        assert scope.state is DeviceState.IDLE
+        assert scope.state is DeviceState.OFFLINE
         assert scope.fault is None
+        await scope.connect()
+        assert scope.state is DeviceState.IDLE
 
 
 class TestPreconditions:
