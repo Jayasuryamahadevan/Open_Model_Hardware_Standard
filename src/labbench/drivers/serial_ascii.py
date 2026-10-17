@@ -69,8 +69,8 @@ class SerialAsciiDevice(Device):
         self.timeout_s = float(config.get("timeout_s", 1.0))
         if not 0.1 <= self.timeout_s <= 10:
             raise ValidationError("serial timeout must be in 0.1..10 seconds")
-        self.terminator = config.get("terminator", "\\n")
-        if self.terminator not in ("\\n", "\\r", "\\r\\n"):
+        self.terminator = config.get("terminator", "\n")
+        if self.terminator not in ("\n", "\r", "\r\n"):
             raise ValidationError("serial terminator must be LF, CR or CRLF")
         self.identity_query = _frame(config.get("identity_query", "*IDN?"))
         self.identity_reply = _frame(config.get("identity_reply", ""))
@@ -168,7 +168,11 @@ class SerialAsciiDevice(Device):
     async def _disconnect(self) -> None:
         opened, self._serial = self._serial, None
         if opened is not None:
-            await asyncio.to_thread(opened.close)
+            def close_port() -> None:
+                with self._lock_sync:
+                    opened.close()
+
+            await asyncio.to_thread(close_port)
 
     async def _read(self, feature: str, name: str) -> Any:
         return await asyncio.to_thread(
