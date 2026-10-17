@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .capability import Command, Feature, Hazard, Property
+from .capability import Command, Feature, Property
 from .errors import (
     CapabilityNotFound,
     DeviceNotReady,
