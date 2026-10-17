@@ -1,15 +1,15 @@
 # LabBench
 
 > **HCP / MCP quick start:** LabBench now serves a standard local MCP endpoint,
-> discovers laptop USB/serial/VISA identities, probes only explicitly configured
-> SCPI addresses, and exposes device manuals and command schemas to the agent.
+> analyzes host USB/serial/VISA endpoints, probes only explicitly configured
+> SCPI addresses, and exposes verified capability schemas as MCP tools.
 > See [hardware onboarding and MCP setup](docs/HCP-ONBOARDING.md). The
 > `configs/simulated-arm.yaml` example lets an MCP client inspect, home and wave
 > a simulated robotic arm. Physical hardware still needs a matching driver and
 > a reviewed command/safety profile; a USB product name cannot reveal a safe
 > control protocol.
 
-[![CI](https://github.com/Jayasuryamahadevan/Open_Model_Hardware_Standard/actions/workflows/ci.yml/badge.svg)](https://github.com/Jayasuryamahadevan/Open_Model_Hardware_Standard/actions/workflows/ci.yml)
+[![CI](https://github.com/Jayasuryamahadevan/Hardware-context-protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/Jayasuryamahadevan/Hardware-context-protocol/actions/workflows/ci.yml)
 
 **A USB cable for laboratory hardware.** Plug any AI model into any supported instrument.
 
@@ -52,7 +52,7 @@ updated as each layer lands.
 | `protocol/` | HTTP/1.1 server, SSE, WebSocket (RFC 6455), stdio | ✅ complete |
 | `protocol/client.py` | Client for all three transports, one call surface | ✅ complete |
 | `bridge/` | Tool schemas (6 AI dialects), human-approval broker | ✅ complete |
-| `bridge/toolset.py` | The gateway tool surface (29 tools, 47 methods) | ✅ complete |
+| `bridge/toolset.py` | The gateway tool surface, including first-step hardware analysis | ✅ complete |
 | `gateway.py` | Assembly: request → ledger → safety → approval → act | ✅ complete |
 | `drivers/simulated/` | Microscope, plate reader, liquid handler, incubator, shared locked labware | ✅ complete |
 | `drivers/` | SCPI, WoT, MicroManager, SiLA2, OPC UA LADS, Opentrons | ✅ complete |
@@ -61,7 +61,7 @@ updated as each layer lands.
 | `experiment/` | Protocols, runs, replay | ✅ complete |
 | `campaign/` | Closed-loop autonomous experimentation: search space, objectives, GP-EI planner, runner | ✅ complete |
 | `evals/` | Scored agent evals: 6 tasks (capability/safety/recovery), graded mechanically, any dialect | ✅ complete |
-| `cli.py` | `serve` · `doctor` · `devices` · `tools` · `ledger` · `call` · `experiment run` · `campaign run` · `eval run` | ✅ complete |
+| `cli.py` | `serve` · `analyze` · `doctor` · `devices` · `tools` · `ledger` · `call` · `experiment run` · `campaign run` · `eval run` | ✅ complete |
 | `tests/` | 488 tests: unit, real-protocol integration, CLI, and a driver×dialect conformance matrix | ✅ complete |
 | `examples/` | A working agent loop per dialect (Claude, GPT, Gemini, zero-SDK generic) | ✅ complete |
 | `examples/hardware/` | Real (non-simulated) hardware: a Raspberry Pi + camera + Coral Edge TPU as a WoT Thing | ✅ complete |
@@ -409,8 +409,8 @@ use a POSIX shell and leave you at the repository root for the config paths
 in the examples.
 
 ```bash
-git clone https://github.com/Jayasuryamahadevan/Open_Model_Hardware_Standard.git
-cd Open_Model_Hardware_Standard
+git clone https://github.com/Jayasuryamahadevan/Hardware-context-protocol.git
+cd Hardware-context-protocol
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e .          # gateway + simulated instruments
@@ -428,6 +428,7 @@ python -m pip install -e '.[all]'       # + every supported protocol
 
 ```bash
 labbench doctor -c configs/simulated-lab.yaml   # what is installed, what is not
+labbench analyze -c configs/simulated-lab.yaml  # observed endpoints, bindings, usable MCP controls
 labbench devices -c configs/simulated-lab.yaml  # instruments and their commands
 labbench serve   -c configs/simulated-lab.yaml  # start the gateway
 ```
