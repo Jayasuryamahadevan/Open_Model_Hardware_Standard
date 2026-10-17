@@ -186,6 +186,8 @@ def mcp_router(gateway: Any, *, profile: str = "core") -> Router:
     @router.method("tools/call")
     async def tools_call(name: str, arguments: dict[str, Any] | None = None,
                          ctx: RpcContext | None = None) -> dict[str, Any]:
+        if profile == "core" and name == "hardware_discover":
+            name = "hardware_analyze"
         dynamic = _device_tools(gateway).get(name)
         spec = by_name.get(name)
         if spec is None and dynamic is None:
