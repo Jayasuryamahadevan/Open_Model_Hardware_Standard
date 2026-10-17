@@ -21,12 +21,11 @@ itself.
 
 `Credential` closes both: a site configures one token per identity, and the
 actor that reaches the ledger and the safety kernel is whichever credential's
-token matched, never a value the caller supplied. The legacy single
-`--token`/`LABBENCH_TOKEN` flag still works exactly as before -- a shared
-secret with a self-declared actor -- because that is still the right shape
-for a single-operator dev bench; it is superseded the moment any
-`credentials` are configured, so a site is never in both regimes without
-knowing it.
+token matched, never a value the caller supplied. The legacy single `--token`/`LABBENCH_TOKEN` flag still works
+as one shared authentication secret, but no longer accepts a caller-declared
+human identity: it maps to `agent:legacy-token`. Use named `credentials`
+with fixed human/agent actors for any workflow needing approval identity.
+Configured credentials override the legacy token.
 """
 
 from __future__ import annotations
@@ -79,9 +78,9 @@ class Authenticator:
     def authenticate(self, bearer: str | None, *, claimed_actor: str = "") -> Identity | None:
         """`None` means "not authenticated"; the caller decides whether that
         is fatal via `required`. `claimed_actor` is trusted only in the
-        legacy single-token regime, and only because that regime already
-        grants one flat, shared level of access -- there is no per-identity
-        guarantee for it to undermine.
+        legacy single-token regime. For physical fault clearance and human
+        approvals, this shared secret always maps to agent:legacy-token;
+        an unverified header cannot confer human authority.
         """
         if bearer is None:
             return None
@@ -94,5 +93,5 @@ class Authenticator:
             # a site ends up unsure which guarantee actually applies.
             return None
         if self.legacy_token is not None and secrets.compare_digest(bearer, self.legacy_token):
-            return Identity(claimed_actor or "agent:http")
+            return Identity("agent:legacy-token")
         return None

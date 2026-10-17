@@ -102,6 +102,34 @@ async def _serve(args: argparse.Namespace) -> int:
         finally:
             await gateway.close()
 
+    if args.transport == "mcp-http":
+        from .protocol.auth import Credential
+        from .protocol.mcp import mcp_router
+        from .protocol.mcp_http import register_mcp_http
+        from .protocol.router import Router
+
+        token = args.token or os.environ.get("LABBENCH_TOKEN")
+        credentials = [Credential.model_validate(c) for c in config.credentials]
+        if not token and not credentials:
+            await gateway.close()
+            raise SystemExit("labbench: mcp-http requires --token or named credentials")
+        server = HttpServer(
+            Router(), host=args.host, port=args.port, token=token,
+            credentials=credentials, allow_origin="", server_name=f"labbench-mcp/{__version__}",
+        )
+        register_mcp_http(
+            server, mcp_router(gateway), allowed_origins=args.mcp_allowed_origin,
+        )
+        try:
+            await server.start()
+            print(f"labbench: authenticated MCP at {server.url}/mcp "
+                  "(use HTTPS termination for remote clients)", file=sys.stderr)
+            await server.serve_forever()
+        finally:
+            await server.close()
+            await gateway.close()
+        return 0
+
     transports = (
         ["stdio", "http", "ws"] if args.transport == "all" else [args.transport]
     )
@@ -629,11 +657,15 @@ def build_parser() -> argparse.ArgumentParser:
     serve = sub.add_parser("serve", parents=[common], help="Run the gateway.")
     serve.add_argument("-c", "--config", required=True, help="Lab configuration YAML.")
     serve.add_argument("-t", "--transport", default="http",
-                       choices=["stdio", "http", "ws", "all", "mcp"],
-                       help="mcp for Claude/Cursor/Codex stdio; other choices use the native RPC API.")
+                       choices=["stdio", "http", "ws", "all", "mcp", "mcp-http"],
+                       help="mcp for local stdio; mcp-http for authenticated MCP HTTP.")
     serve.add_argument("--host", default="127.0.0.1",
                        help="Binding off-loopback requires --token.")
     serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument(
+        "--mcp-allowed-origin", action="append", default=[],
+        help="Trusted browser Origin for mcp-http (repeatable; none allowed by default).",
+    )
     serve.add_argument("--token", default=None,
                        help="Bearer token. Also read from LABBENCH_TOKEN.")
     serve.set_defaults(func=_serve)

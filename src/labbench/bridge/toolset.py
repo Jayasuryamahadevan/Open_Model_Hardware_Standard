@@ -262,9 +262,11 @@ def register_tools(router: Router, gateway: Any) -> None:
         )
 
     @router.method("device.connect")
-    async def device_connect(device: str) -> dict[str, Any]:
-        """Bring a device online."""
+    async def device_connect(device: str, ctx: RpcContext) -> dict[str, Any]:
+        """Bring a device online, excluding agent-initiated physical reconnection."""
         dev = gateway.device(device)
+        if not dev.descriptor.simulated and not ctx.actor.startswith("human:"):
+            raise ValidationError("physical device reconnection requires an authenticated human")
         await dev.connect()
         return {"device": device, "state": dev.state.value}
 
@@ -298,6 +300,8 @@ def register_tools(router: Router, gateway: Any) -> None:
             raise ValidationError(
                 "clearing a fault requires a reason describing what was fixed"
             )
+        if not ctx.actor.startswith("human:"):
+            raise ValidationError("only an authenticated human may clear device faults")
         dev = gateway.device(device)
         previous = dev.fault
         await dev.clear_fault()

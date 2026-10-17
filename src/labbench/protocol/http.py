@@ -49,7 +49,7 @@ IDLE_TIMEOUT_S = 120.0
 _STATUS_TEXT = {
     200: "OK", 202: "Accepted", 204: "No Content", 400: "Bad Request",
     401: "Unauthorized", 403: "Forbidden", 404: "Not Found",
-    405: "Method Not Allowed", 408: "Request Timeout", 411: "Length Required",
+    405: "Method Not Allowed", 406: "Not Acceptable", 408: "Request Timeout", 411: "Length Required",
     413: "Payload Too Large", 415: "Unsupported Media Type",
     426: "Upgrade Required", 431: "Request Header Fields Too Large",
     500: "Internal Server Error", 503: "Service Unavailable",
@@ -382,7 +382,15 @@ class HttpServer:
     async def _handle(
         self, request: HttpRequest, writer: asyncio.StreamWriter
     ) -> HttpResponse | None:
-        if request.method == "OPTIONS":
+        if request.path == "/mcp":
+            from .mcp_http import ORIGIN_ERROR, _allowed_origin
+
+            if not _allowed_origin(request.header("origin"),
+                                   getattr(self, "_mcp_allowed_origins", ())):
+                return HttpResponse.error(403, ORIGIN_ERROR)
+            if request.method == "OPTIONS":
+                return HttpResponse(405, b"", headers={"Allow": "POST"})
+        elif request.method == "OPTIONS":
             return HttpResponse(204, b"", "text/plain")
         handler = self.routes.get((request.method, request.path))
         if handler is None:
@@ -427,7 +435,7 @@ class HttpServer:
             # The actor comes from the verified identity whenever one exists --
             # only an unauthenticated dev bench (no token, no credentials)
             # falls back to trusting the caller's own header. See `.auth`.
-            actor = identity.actor if identity is not None else request.header("x-labbench-actor", "agent:http")
+            actor = identity.actor if identity is not None else "agent:unauthenticated-http"
             ctx = RpcContext(
                 actor=actor,
                 session_id=request.header("x-labbench-session", ""),

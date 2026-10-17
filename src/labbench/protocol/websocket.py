@@ -296,9 +296,7 @@ class WebSocketEndpoint:
 
         conn = WebSocketConnection(reader, writer, peer=request.peer)
         self.connections.add(conn)
-        actor = identity.actor if identity is not None else request.header(
-            "x-labbench-actor", "agent:websocket"
-        )
+        actor = identity.actor if identity is not None else "agent:unauthenticated-websocket"
         ctx = RpcContext(
             actor=actor,
             session_id=request.header("x-labbench-session", conn.id),
