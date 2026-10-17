@@ -1,0 +1,7 @@
+Greeting Arm Simulator WAVE-1
+
+This is a simulator. It does not control physical hardware.
+Use MotionControl.home before MotionControl.wave. The wave command accepts
+1 to 3 cycles and an amplitude from 5 to 30 degrees. The simulated arm returns
+to zero after a wave. For real arms, verify the installation, clear the
+workspace, and follow the manufacturer's safety procedures and rated limits.

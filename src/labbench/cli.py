@@ -94,6 +94,14 @@ async def _serve(args: argparse.Namespace) -> int:
     for device_id, problem in boot["unavailable"].items():
         log.warning("device %s unavailable: %s", device_id, problem)
 
+    if args.transport == "mcp":
+        from .protocol.mcp import serve_mcp_stdio
+        try:
+            await serve_mcp_stdio(gateway)
+            return 0
+        finally:
+            await gateway.close()
+
     transports = (
         ["stdio", "http", "ws"] if args.transport == "all" else [args.transport]
     )
@@ -606,8 +614,8 @@ def build_parser() -> argparse.ArgumentParser:
     serve = sub.add_parser("serve", parents=[common], help="Run the gateway.")
     serve.add_argument("-c", "--config", required=True, help="Lab configuration YAML.")
     serve.add_argument("-t", "--transport", default="http",
-                       choices=["stdio", "http", "ws", "all"],
-                       help="stdio for a local agent, ws for duplex, http for anything else.")
+                       choices=["stdio", "http", "ws", "all", "mcp"],
+                       help="mcp for Claude/Cursor/Codex stdio; other choices use the native RPC API.")
     serve.add_argument("--host", default="127.0.0.1",
                        help="Binding off-loopback requires --token.")
     serve.add_argument("--port", type=int, default=8765)

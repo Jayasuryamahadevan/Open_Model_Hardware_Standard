@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .device import Device, DeviceDescriptor, DeviceState
 from .errors import DeviceNotFound, DriverUnavailable
@@ -41,6 +41,45 @@ class DeviceConfig(BaseModel):
     autoconnect: bool = True
     #: Driver-specific settings passed through verbatim.
     settings: dict[str, Any] = Field(default_factory=dict)
+    #: Operator-provided manuals. Local files and HTTPS links are exposed to agents.
+    manuals: list[str] = Field(default_factory=list)
+    #: Exact identity fields to verify after the driver connects.
+    expected_identity: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("expected_identity")
+    @classmethod
+    def validate_expected_identity(cls, value: dict[str, str]) -> dict[str, str]:
+        unknown = set(value) - {"vendor", "model", "serial", "firmware"}
+        if unknown:
+            raise ValueError(f"unsupported identity fields: {sorted(unknown)}")
+        if any(not item.strip() for item in value.values()):
+            raise ValueError("expected identity values must not be blank")
+        return value
+
+
+class ScpiBinding(BaseModel):
+    """A reviewed, exact identity rule for attaching a discovered SCPI device."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    address: str
+    vendor: str
+    model: str
+    profile: str
+    serial: str | None = None
+    firmware: str | None = None
+    kind: str = "instrument"
+    display_name: str = ""
+    manuals: list[str] = Field(default_factory=list)
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("vendor", "model", "profile")
+    @classmethod
+    def required_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("binding identity and profile must not be blank")
+        return value
 
 
 class LabConfig(BaseModel):
@@ -49,6 +88,10 @@ class LabConfig(BaseModel):
     name: str = "lab"
     description: str = ""
     devices: list[DeviceConfig] = Field(default_factory=list)
+    #: Explicit SCPI addresses to identify with *IDN?; never a subnet scan.
+    scpi_targets: list[str] = Field(default_factory=list)
+    #: Devices may be activated at runtime only after exact identity matching.
+    scpi_bindings: list[ScpiBinding] = Field(default_factory=list)
     #: Raw safety policy; parsed by labbench.core.safety.SafetyPolicy.
     safety: dict[str, Any] = Field(default_factory=dict)
     memory: list[dict[str, Any]] = Field(default_factory=list)
@@ -62,8 +105,22 @@ class LabConfig(BaseModel):
 
     @classmethod
     def load(cls, path: str | Path) -> LabConfig:
-        text = Path(path).expanduser().read_text(encoding="utf-8")
-        return cls.model_validate(yaml.safe_load(text) or {})
+        config_path = Path(path).expanduser().resolve()
+        text = config_path.read_text(encoding="utf-8")
+        config = cls.model_validate(yaml.safe_load(text) or {})
+        for device in config.devices:
+            device.manuals = [
+                source if source.startswith("https://") or Path(source).is_absolute()
+                else str((config_path.parent / source).resolve())
+                for source in device.manuals
+            ]
+        for binding in config.scpi_bindings:
+            binding.manuals = [
+                source if source.startswith("https://") or Path(source).is_absolute()
+                else str((config_path.parent / source).resolve())
+                for source in binding.manuals
+            ]
+        return config
 
 
 class DriverRegistry:
@@ -136,10 +193,13 @@ class DeviceManager:
         self._devices: dict[str, Device] = {}
         self._configs: dict[str, DeviceConfig] = {}
         self._event_sinks: list[Any] = []
+        self.quarantined: dict[str, str] = {}
 
     # -- construction -----------------------------------------------------
 
     def add_from_config(self, cfg: DeviceConfig) -> Device:
+        if cfg.id in self._devices:
+            raise ValueError(f"device {cfg.id!r} is already registered")
         cls = self.registry.get(cfg.driver)
         descriptor = DeviceDescriptor(
             id=cfg.id,
@@ -155,6 +215,11 @@ class DeviceManager:
         for sink in self._event_sinks:
             device.subscribe(sink)
         return device
+
+    def remove(self, device_id: str) -> None:
+        self._devices.pop(device_id, None)
+        self._configs.pop(device_id, None)
+        self.quarantined.pop(device_id, None)
 
     def load(self, config: LabConfig) -> list[Device]:
         return [self.add_from_config(c) for c in config.devices]
@@ -211,18 +276,33 @@ class DeviceManager:
         results: dict[str, str] = {}
 
         async def one(dev: Device) -> None:
-            cfg = self._configs.get(dev.id)
-            if cfg is not None and not cfg.autoconnect:
-                results[dev.id] = "skipped (autoconnect: false)"
-                return
-            try:
-                await dev.connect()
-                results[dev.id] = dev.state.value
-            except Exception as exc:  # noqa: BLE001 - one bad device must not stop the rest
-                results[dev.id] = f"error: {exc}"
+            results[dev.id] = await self.connect_one(dev.id)
 
         await asyncio.gather(*(one(d) for d in self._devices.values()))
         return results
+
+    async def connect_one(self, device_id: str) -> str:
+        dev = self.get(device_id)
+        cfg = self._configs.get(device_id)
+        if cfg is not None and not cfg.autoconnect:
+            return "skipped (autoconnect: false)"
+        try:
+            await dev.connect()
+            expected = cfg.expected_identity if cfg is not None else {}
+            mismatches = [
+                f"{field}: expected {value!r}, observed {getattr(dev.descriptor, field, None)!r}"
+                for field, value in expected.items()
+                if getattr(dev.descriptor, field, None) != value
+            ]
+            if mismatches:
+                reason = "identity mismatch: " + "; ".join(mismatches)
+                self.quarantined[dev.id] = reason
+                await dev.disconnect()
+                await dev.fail(reason)
+                return f"error: {reason}"
+            return dev.state.value
+        except Exception as exc:  # noqa: BLE001 - caller reports one failed device
+            return f"error: {exc}"
 
     async def disconnect_all(self) -> None:
         await asyncio.gather(

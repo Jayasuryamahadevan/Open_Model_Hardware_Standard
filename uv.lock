@@ -905,6 +905,9 @@ imaging = [
     { name = "tifffile", version = "2026.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "tifffile", version = "2026.8.23", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
+manuals = [
+    { name = "pypdf" },
+]
 micromanager = [
     { name = "pymmcore-plus" },
     { name = "useq-schema" },
@@ -931,6 +934,7 @@ requires-dist = [
     { name = "ophyd-async", marker = "extra == 'epics'", specifier = ">=0.5" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pymmcore-plus", marker = "extra == 'micromanager'", specifier = ">=0.13" },
+    { name = "pypdf", marker = "extra == 'manuals'", specifier = ">=5.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pyvisa", marker = "extra == 'scpi'", specifier = ">=1.14" },
@@ -942,7 +946,7 @@ requires-dist = [
     { name = "useq-schema", marker = "extra == 'micromanager'", specifier = ">=0.5" },
     { name = "zeroconf", marker = "extra == 'discovery'", specifier = ">=0.132" },
 ]
-provides-extras = ["micromanager", "scpi", "sila2", "opcua", "epics", "discovery", "http", "imaging", "dev", "all"]
+provides-extras = ["micromanager", "scpi", "sila2", "opcua", "epics", "discovery", "http", "imaging", "manuals", "dev", "all"]
 
 [[package]]
 name = "lxml"
@@ -2133,6 +2137,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/3f/e8/7325d258199b159eb2c03fe32107533e2832e70e63f4fb88a6aa00023201/pyopenssl-26.4.0.tar.gz", hash = "sha256:28dfcce0162b9211413e26dfbfdf1d24317fbeba18fc93c12400a1856b2a0bc7", size = 182046, upload-time = "2026-08-01T19:50:50.512Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/51/ad/2cf6d3fa2fae5c79e1ed9960c0d42badd0f94d81dd12b50604cdc839e648/pyopenssl-26.4.0-py3-none-any.whl", hash = "sha256:f0eb0cb2d581d3ad2b9c489468485e7f2ab6727d08401bcf9d824c3caddf3c1c", size = 56026, upload-time = "2026-08-01T19:50:48.94Z" },
+]
+
+[[package]]
+name = "pypdf"
+version = "6.21.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/40/08cc87810195e5ee37a6917d4b19abc907c8def3a7ce265a81c7f5073304/pypdf-6.21.0.tar.gz", hash = "sha256:c16174c8653abafbe4d023b3c9227d226938d9579ffb5a73b4fac7756c0895a6", size = 7088285, upload-time = "2026-10-16T10:23:18.47Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/64/5cea5792cae22892a4ddba8ed9f7424c77b4cb49fdca5016bd62145c12c6/pypdf-6.21.0-py3-none-any.whl", hash = "sha256:3aec619699dacb1b73f57e87d9adaa4424814517b2cc028de20adba5a37af4c4", size = 405135, upload-time = "2026-10-16T10:23:16.38Z" },
 ]
 
 [[package]]

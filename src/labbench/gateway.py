@@ -30,10 +30,11 @@ from .core.errors import (
     ApprovalRequired,
     LabBenchError,
     SafetyViolation,
+    ValidationError,
 )
 from .core.jobs import Job, JobManager
 from .core.provenance import Ledger
-from .core.registry import DeviceManager, DriverRegistry, LabConfig
+from .core.registry import DeviceConfig, DeviceManager, DriverRegistry, LabConfig
 from .core.safety import Decision, Effect, SafetyKernel, SafetyPolicy
 from .experiment import ExperimentManager
 from .memory import MemoryConfig, MemoryManager
@@ -76,6 +77,8 @@ class Gateway:
         #: Sinks that fan events out to connected transports.
         self._event_sinks: list[Any] = []
         self._closed = False
+        self._analysis: dict[str, str] = {}
+        self._activation_lock = asyncio.Lock()
 
         self.devices.subscribe_all(self._on_device_event)
         self.jobs.watch(self._on_job_update)
@@ -201,6 +204,98 @@ class Gateway:
     def device(self, device_id: str) -> Device:
         return self.devices.get(device_id)
 
+    async def analyze_hardware(self) -> dict[str, Any]:
+        """Identify connections and match only operator-reviewed binding rules."""
+        from .core.discovery import discover_hardware
+        from .drivers.scpi import PROFILES
+
+        targets = list(dict.fromkeys(
+            [*self.config.scpi_targets, *(rule.address for rule in self.config.scpi_bindings)]
+        ))
+        inventory = await discover_hardware(targets)
+        by_address = {item["address"]: item for item in inventory["scpi"]}
+        self._analysis.clear()
+        bindings = []
+        for rule in self.config.scpi_bindings:
+            observed = by_address.get(rule.address, {})
+            fields = {"vendor": rule.vendor, "model": rule.model}
+            if rule.serial is not None:
+                fields["serial"] = rule.serial
+            if rule.firmware is not None:
+                fields["firmware"] = rule.firmware
+            mismatches = [field for field, expected in fields.items()
+                          if observed.get(field) != expected]
+            if "error" in observed:
+                reason = observed["error"]
+            elif mismatches:
+                reason = f"identity mismatch in {', '.join(mismatches)}"
+            elif rule.profile not in PROFILES or rule.profile == "generic":
+                reason = f"profile {rule.profile!r} is not a reviewed built-in profile"
+            elif rule.id in self.devices.all():
+                reason = "device id already configured"
+            else:
+                reason = None
+                self._analysis[rule.id] = observed["identity_reply"]
+            bindings.append({
+                "rule_id": rule.id, "address": rule.address,
+                "expected_identity": fields, "observed_identity": observed,
+                "profile": rule.profile, "manuals": rule.manuals,
+                "ready_to_activate": reason is None, "reason": reason,
+            })
+        inventory["bindings"] = bindings
+        inventory["configured_devices"] = [
+            {"id": dev.id, "descriptor": dev.descriptor.model_dump(mode="json"),
+             "state": dev.state.value}
+            for dev in self.devices.all().values()
+        ]
+        return inventory
+
+    async def activate_hardware(self, rule_id: str, *, actor: str) -> dict[str, Any]:
+        """Attach a device only after analysis and a fresh identity recheck."""
+        from .core.discovery import scpi_identity
+
+        async with self._activation_lock:
+            rule = next((r for r in self.config.scpi_bindings if r.id == rule_id), None)
+            if rule is None:
+                raise ValidationError(f"no reviewed binding rule {rule_id!r}")
+            seen = self._analysis.get(rule_id)
+            if seen is None:
+                raise ValidationError("call hardware.discover first; no matching analysis is active")
+            fresh = await scpi_identity(rule.address)
+            if fresh.get("identity_reply") != seen:
+                self._analysis.pop(rule_id, None)
+                raise SafetyViolation("device identity changed since analysis; analyze again",
+                                      rule_id=rule_id, observed=fresh)
+            expected = {"vendor": rule.vendor, "model": rule.model}
+            if rule.serial is not None:
+                expected["serial"] = rule.serial
+            if rule.firmware is not None:
+                expected["firmware"] = rule.firmware
+            cfg = DeviceConfig(
+                id=rule.id, driver="scpi", display_name=rule.display_name or rule.id,
+                kind=rule.kind, vendor=rule.vendor, model=rule.model, serial=rule.serial,
+                expected_identity=expected, manuals=rule.manuals,
+                settings={**rule.settings, "address": rule.address, "profile": rule.profile},
+            )
+            try:
+                self.devices.add_from_config(cfg)
+                state = await self.devices.connect_one(rule.id)
+                if state != "idle":
+                    raise ValidationError(f"device could not activate: {state}")
+            except Exception:
+                if rule.id in self.devices.all():
+                    await self.devices.get(rule.id).disconnect()
+                    self.devices.remove(rule.id)
+                raise
+            self.config.devices.append(cfg)
+            self._analysis.pop(rule_id, None)
+            descriptor = self.devices.get(rule.id).descriptor.model_dump(mode="json")
+            self.ledger.log("device_activate", actor=actor, device_id=rule.id,
+                            payload={"descriptor": descriptor, "profile": rule.profile})
+            await self._broadcast("tools.list_changed", {"device": rule.id})
+            return {"device": rule.id, "state": state, "descriptor": descriptor,
+                    "profile": rule.profile}
+
     async def authorize(
         self,
         device: Device,
@@ -258,6 +353,11 @@ class Gateway:
         """
         args = dict(args or {})
         device = self.device(device_id)
+        if device_id in self.devices.quarantined:
+            raise SafetyViolation(
+                f"device {device_id!r} is quarantined: {self.devices.quarantined[device_id]}",
+                device=device_id,
+            )
         _, spec = device.resolve(feature, command)
 
         self.ledger.log(

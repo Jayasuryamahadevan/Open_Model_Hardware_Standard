@@ -1,0 +1,13 @@
+name: simulated-arm
+description: A laptop-only robotic arm demonstration for MCP clients.
+devices:
+  - id: arm1
+    driver: sim_robot_arm
+    display_name: Greeting Arm Simulator
+    kind: robotic_arm
+    vendor: LabBench Simulation
+    model: WAVE-1
+    manuals:
+      - ../docs/simulated-arm-manual.txt
+safety:
+  autonomy: 2

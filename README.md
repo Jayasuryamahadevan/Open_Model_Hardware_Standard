@@ -1,5 +1,14 @@
 # LabBench
 
+> **HCP / MCP quick start:** LabBench now serves a standard local MCP endpoint,
+> discovers laptop USB/serial/VISA identities, probes only explicitly configured
+> SCPI addresses, and exposes device manuals and command schemas to the agent.
+> See [hardware onboarding and MCP setup](docs/HCP-ONBOARDING.md). The
+> `configs/simulated-arm.yaml` example lets an MCP client inspect, home and wave
+> a simulated robotic arm. Physical hardware still needs a matching driver and
+> a reviewed command/safety profile; a USB product name cannot reveal a safe
+> control protocol.
+
 [![CI](https://github.com/Jayasuryamahadevan/Open_Model_Hardware_Standard/actions/workflows/ci.yml/badge.svg)](https://github.com/Jayasuryamahadevan/Open_Model_Hardware_Standard/actions/workflows/ci.yml)
 
 **A USB cable for laboratory hardware.** Plug any AI model into any supported instrument.
