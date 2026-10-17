@@ -271,6 +271,9 @@ class Device(abc.ABC):
         await self._set_state(DeviceState.CONNECTING)
         try:
             await self._connect()
+        except asyncio.CancelledError:
+            await self.fail("connect cancelled; identity and physical state uncertain")
+            raise
         except Exception as exc:
             await self.fail(f"connect failed: {exc}")
             raise
@@ -279,8 +282,13 @@ class Device(abc.ABC):
     async def disconnect(self) -> None:
         try:
             await self._disconnect()
-        finally:
-            await self._set_state(DeviceState.OFFLINE, "disconnected")
+        except asyncio.CancelledError:
+            await self.fail("disconnect cancelled; physical state uncertain")
+            raise
+        except Exception as exc:
+            await self.fail(f"disconnect failed: {exc}")
+            raise
+        await self._set_state(DeviceState.OFFLINE, "disconnected")
 
     async def initialize(self, ctx: ExecutionContext | None = None) -> None:
         """Home / calibrate. Many commands are gated behind this."""
@@ -288,6 +296,9 @@ class Device(abc.ABC):
         await self._set_state(DeviceState.INITIALIZING)
         try:
             await self._initialize(ctx or ExecutionContext())
+        except asyncio.CancelledError:
+            await self.fail("initialization cancelled; physical state uncertain")
+            raise
         except Exception as exc:
             await self.fail(f"initialize failed: {exc}")
             raise
