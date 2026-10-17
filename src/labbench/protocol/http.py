@@ -435,7 +435,7 @@ class HttpServer:
             # The actor comes from the verified identity whenever one exists --
             # only an unauthenticated dev bench (no token, no credentials)
             # falls back to trusting the caller's own header. See `.auth`.
-            actor = identity.actor if identity is not None else request.header("x-labbench-actor", "agent:http")
+            actor = identity.actor if identity is not None else "agent:unauthenticated-http"
             ctx = RpcContext(
                 actor=actor,
                 session_id=request.header("x-labbench-session", ""),
