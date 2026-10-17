@@ -38,6 +38,19 @@ vendor's mouse.
 
 LabBench is that contract for lab instruments and AI agents.
 
+## Control-platform extensions
+
+The latest development includes bounded Windows/macOS host inventory,
+authenticated MCP Streamable HTTP (`labbench serve -t mcp-http`, the
+2025-11-25 profile), and a reviewed `http_api` adapter for documented
+REST/JSON hardware. Device command timeouts fault closed; physical fault
+clearance and reconnect are restricted to authenticated human operators.
+
+For secure deployment, API adapter configuration, failure handling, and
+the opt-in physical hardware testing process, see
+[Hardware certification and hardening](docs/HARDWARE-CERTIFICATION.md).
+Physical interlocks and emergency stops must be tested independently.
+
 ---
 
 ## Status
