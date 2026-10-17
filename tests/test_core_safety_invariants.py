@@ -7,9 +7,10 @@ import asyncio
 import pytest
 
 from labbench.core.capability import Command, Feature, Hazard
-from labbench.core.device import Device, DeviceDescriptor, DeviceState
+from labbench.core.device import Device, DeviceDescriptor, DeviceState, ExecutionContext
 from labbench.core.errors import DeviceNotReady, TransportError
 from labbench.core.registry import DeviceConfig, DeviceManager, LabConfig
+from labbench.drivers.simulated.microscope import SimulatedMicroscope
 from labbench.gateway import Gateway
 from labbench.protocol.jsonrpc import Request
 from labbench.protocol.mcp import mcp_router
@@ -168,6 +169,23 @@ async def test_human_connect_rpc_still_verifies_physical_identity(tmp_path):
         assert gateway.device("fixture").state is DeviceState.FAULT
     finally:
         await gateway.close()
+
+
+async def test_dry_run_keeps_hardware_preconditions(tmp_path):
+    scope = SimulatedMicroscope(
+        DeviceDescriptor(id="scope", simulated=True),
+        data_dir=str(tmp_path), seed=1,
+    )
+    await scope.connect()
+    try:
+        with pytest.raises(DeviceNotReady):
+            await scope.invoke(
+                "MotionControl", "move_absolute",
+                {"x_um": 100.0, "y_um": 100.0},
+                ExecutionContext(dry_run=True),
+            )
+    finally:
+        await scope.disconnect()
 
 
 async def test_core_mcp_catalog_smaller_than_full(tmp_path):
