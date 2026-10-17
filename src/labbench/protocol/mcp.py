@@ -42,7 +42,7 @@ class McpRouter(Router):
         declared = (meta.get("io.modelcontextprotocol/protocolVersion")
                     if isinstance(meta, dict) else None)
         if declared is not None and declared not in SUPPORTED_VERSIONS:
-                return Response.fail(request.id, JsonRpcError(
+            return Response.fail(request.id, JsonRpcError(
                 -32022, "Unsupported protocol version",
                 {"supported": list(SUPPORTED_VERSIONS), "requested": declared},
             ))
