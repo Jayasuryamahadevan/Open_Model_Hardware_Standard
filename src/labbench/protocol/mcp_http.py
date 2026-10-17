@@ -1,9 +1,9 @@
-"""Authenticated, origin-checked MCP Streamable HTTP (2025-11-25 profile).
+"""Authenticated dual-era MCP Streamable HTTP for core JSON-result methods.
 
-One POST maps to one MCP JSON-RPC message. Responses are application/json;
-GET SSE and DELETE sessions return 405. No MCP-Session-Id is issued, so the
-server uses the stateless option permitted by the 2025 Streamable HTTP spec.
-TLS is supplied by a trusted reverse proxy; the socket should bind loopback.
+2026-07-28 uses independent per-request metadata and mandatory method/name
+headers. 2025 clients retain their initialize path. Only the JSON response
+subset is implemented: extensions, streaming subscriptions and MRTR are not
+advertised. The device control safety kernel is shared across transports.
 """
 
 from __future__ import annotations
@@ -13,11 +13,12 @@ from collections.abc import Iterable
 from typing import Any
 
 from .http import HttpRequest, HttpResponse, HttpServer
-from .jsonrpc import JsonRpcError, Request, Response, parse_message
+from .jsonrpc import METHOD_NOT_FOUND, JsonRpcError, Request, Response, parse_message
+from .mcp import LEGACY_VERSIONS, MODERN_VERSION, SUPPORTED_VERSIONS
 from .router import Router, RpcContext
 
-PROFILE = "2025-11-25"
-SUPPORTED = {"2025-11-25", "2025-06-18"}
+PROFILE = LEGACY_VERSIONS[0]
+SUPPORTED = {MODERN_VERSION, *LEGACY_VERSIONS[:2]}
 ORIGIN_ERROR = "Origin is not approved for this MCP endpoint"
 
 
@@ -66,14 +67,14 @@ def register_mcp_http(
         if "application/json" not in accept or "text/event-stream" not in accept:
             return HttpResponse.error(406, "Accept must include application/json and text/event-stream")
 
-        # The 2026 stateless dialect requires MCP-Method and new method shapes.
-        # Refuse it until fully implemented rather than mis-advertising compliance.
         requested = request.header("mcp-protocol-version")
         if requested and requested not in SUPPORTED:
-            return HttpResponse.error(400, "unsupported MCP protocol version")
+            return HttpResponse.json(Response.fail(None, JsonRpcError(
+                -32022, "Unsupported protocol version",
+                {"supported": list(SUPPORTED_VERSIONS), "requested": requested},
+            )).to_dict(), 400)
         if request.header("mcp-session-id"):
             return HttpResponse.error(400, "this endpoint does not issue MCP sessions")
-
         try:
             requests, batched = parse_message(request.body)
         except JsonRpcError as exc:
@@ -81,12 +82,49 @@ def register_mcp_http(
         if batched or len(requests) != 1:
             return HttpResponse.error(400, "MCP requires one JSON-RPC message per POST")
         req = requests[0]
+        params = req.params if isinstance(req.params, dict) else {}
+        meta = params.get("_meta", {})
+        declared = (
+            meta.get("io.modelcontextprotocol/protocolVersion")
+            if isinstance(meta, dict) else None
+        )
+        if declared and declared not in SUPPORTED:
+            return HttpResponse.json(Response.fail(req.id, JsonRpcError(
+                -32022, "Unsupported protocol version",
+                {"supported": list(SUPPORTED_VERSIONS), "requested": declared},
+            )).to_dict(), 400)
+        modern = requested == MODERN_VERSION or declared == MODERN_VERSION
+        if modern:
+            expected_name = (
+                params.get("name") if req.method in ("tools/call", "prompts/get")
+                else params.get("uri") if req.method == "resources/read" else None
+            )
+            header_name = request.header("mcp-name")
+            if (requested != MODERN_VERSION or declared != MODERN_VERSION
+                    or request.header("mcp-method") != req.method
+                    or (expected_name is not None and header_name != expected_name)
+                    or (expected_name is None and header_name)
+                    or (expected_name is not None and not isinstance(expected_name, str))):
+                return HttpResponse.json(Response.fail(req.id, JsonRpcError(
+                    -32020, "MCP header/body mismatch",
+                )).to_dict(), 400)
+            if not isinstance(meta, dict) or not isinstance(
+                meta.get("io.modelcontextprotocol/clientCapabilities"), dict
+            ):
+                return HttpResponse.json(Response.fail(req.id, JsonRpcError(
+                    -32602, "MCP modern request requires clientCapabilities",
+                )).to_dict(), 400)
+            if not mcp_router.has(req.method):
+                return HttpResponse.json(Response.fail(req.id, JsonRpcError(
+                    METHOD_NOT_FOUND, f"Unknown MCP method {req.method!r}",
+                )).to_dict(), 404)
+        elif requested and requested not in SUPPORTED:
+            return HttpResponse.error(400, "unsupported MCP version")
         if req.method == "initialize":
             if not isinstance(req.params, dict):
                 return HttpResponse.error(400, "initialize needs an object")
             client_version = req.params.get("protocolVersion", PROFILE)
-            if client_version not in SUPPORTED:
-                # Negotiate down from unrecognized versions to our actual profile.
+            if client_version not in LEGACY_VERSIONS:
                 req = Request(req.method, {**req.params, "protocolVersion": PROFILE},
                               req.id, is_notification=req.is_notification)
         context = RpcContext(actor=identity.actor, transport="mcp-http", peer=request.peer)
