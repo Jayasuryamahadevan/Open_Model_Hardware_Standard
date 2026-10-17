@@ -11,10 +11,11 @@ import pytest
 from labbench.core.analysis import build_analysis
 from labbench.core.device import DeviceDescriptor, DeviceState
 from labbench.core.discovery import native_inventory
-from labbench.core.errors import DeviceNotReady, ValidationError
+from labbench.core.errors import DeviceNotReady, TransportError, ValidationError
 from labbench.core.registry import DeviceConfig, LabConfig
 from labbench.drivers.http_api import HttpApiDevice
 from labbench.gateway import Gateway
+from labbench.protocol.auth import Authenticator
 from labbench.protocol.http import HttpRequest, HttpServer
 from labbench.protocol.mcp import mcp_router
 from labbench.protocol.mcp_http import _allowed_origin, register_mcp_http
@@ -229,3 +230,51 @@ async def test_streamable_http_auth_origin_and_tool_dispatch(tmp_path: Path):
         assert notice is not None and notice.status == 202
     finally:
         await gw.close()
+
+
+async def test_loss_of_connection_faults_before_retry(monkeypatch):
+    driver = HttpApiDevice(DeviceDescriptor(id="light"), **_configuration())
+
+    async def connect():
+        pass
+
+    async def disconnected(*args, **kwargs):
+        raise TransportError("connection dropped", device=driver.id)
+
+    monkeypatch.setattr(driver, "_connect", connect)
+    monkeypatch.setattr(driver, "_invoke", disconnected)
+    await driver.connect()
+    with pytest.raises(TransportError):
+        await driver.invoke("Light", "set_level", {"level": 20})
+    assert driver.state is DeviceState.FAULT
+    with pytest.raises(DeviceNotReady):
+        await driver.connect()
+
+
+async def test_cancellation_faults_while_state_uncertain(monkeypatch):
+    driver = HttpApiDevice(DeviceDescriptor(id="light"), **_configuration())
+
+    async def connect():
+        pass
+
+    async def stall(*args, **kwargs):
+        await asyncio.sleep(30)
+
+    monkeypatch.setattr(driver, "_connect", connect)
+    monkeypatch.setattr(driver, "_invoke", stall)
+    await driver.connect()
+    task = asyncio.create_task(driver.invoke(
+        "Light", "set_level", {"level": 20},
+    ))
+    await asyncio.sleep(0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert driver.state is DeviceState.FAULT
+
+
+def test_shared_secret_cannot_claim_human_identity():
+    auth = Authenticator(legacy_token="secret")
+    result = auth.authenticate("secret", claimed_actor="human:fake")
+    assert result is not None
+    assert result.actor == "agent:legacy-token"
