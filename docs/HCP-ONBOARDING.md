@@ -51,7 +51,7 @@ Ask the client to discover the arm and make it wave hello. The intended tool
 sequence is `hardware_analyze`, `device_describe`, `device_manual`,
 `device_simulate`, `device_invoke` with `home`, `device_simulate` with `wave`,
 `device_invoke` with `wave`, and `device_read`. The arm is simulated; no motor
-will move. The same stable MCP tools work for every configured instrument.
+will move. The core MCP tool catalog stays intentionally small. Use `--mcp-profile full` only\nwhen you need experiment, campaign, memory or advanced administrative tools.\nThe same stable core tool names work for every configured instrument.
 `tools/list` includes JSON schemas and safety hints; `resources/list` exposes
 live device capability descriptions at `hcp://device/{id}`.
 
@@ -61,7 +61,7 @@ live device capability descriptions at `hcp://device/{id}`.
    no extra dependency; USBTMC/GPIB SCPI needs `labbench[scpi]`. Cross-platform
    serial enumeration needs `labbench[discovery]`.
 2. Add an explicit SCPI address to `scpi_targets` and restart the MCP server.
-   `hardware_discover` sends only `*IDN?` to that address. USB descriptors,
+   `hardware_analyze` sends only `*IDN?` to that address. USB descriptors,
    serial ports and VISA resource names are inventoried without opening them.
 3. Inspect the returned manufacturer, model, serial and firmware, then match
    the device to a driver and a reviewed command profile. A product ID or
