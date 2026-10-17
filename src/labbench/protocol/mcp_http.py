@@ -48,6 +48,7 @@ def register_mcp_http(
     Routes also require authenticated identities even for localhost.
     """
     allow = tuple(allowed_origins)
+    server._mcp_allowed_origins = allow
 
     async def _handle(request: HttpRequest, identity: Any) -> HttpResponse:
         if identity is None:
