@@ -47,6 +47,49 @@ async def test_unverified_configured_serial_cannot_self_certify():
     )
 
 
+async def test_configured_model_is_not_observed_hardware_identity():
+    manager = DeviceManager()
+    manager.registry.register("unverified-fixture", UnverifiedDevice)
+    device = manager.add_from_config(DeviceConfig(
+        id="fixture", driver="unverified-fixture", vendor="ACME",
+        model="FAKE-MODEL", expected_identity={"model": "FAKE-MODEL"},
+        autoconnect=False,
+    ))
+    assert device.descriptor.vendor == "unknown"
+    assert device.descriptor.model == "unknown"
+    result = await manager.connect_one("fixture", manual=True)
+    assert "identity mismatch" in result
+    assert device.state is DeviceState.FAULT
+
+
+async def test_cancelled_connect_never_lingers_in_connecting(monkeypatch):
+    device = UnverifiedDevice(DeviceDescriptor(id="fixture"))
+
+    async def slow_connect():
+        await asyncio.sleep(30)
+
+    monkeypatch.setattr(device, "_connect", slow_connect)
+    task = asyncio.create_task(device.connect())
+    await asyncio.sleep(0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert device.state is DeviceState.FAULT
+
+
+async def test_disconnect_failure_never_looks_offline(monkeypatch):
+    device = UnverifiedDevice(DeviceDescriptor(id="fixture"))
+    await device.connect()
+
+    async def fail_disconnect():
+        raise TransportError("USB cable vanished")
+
+    monkeypatch.setattr(device, "_disconnect", fail_disconnect)
+    with pytest.raises(TransportError):
+        await device.disconnect()
+    assert device.state is DeviceState.FAULT
+
+
 async def test_fault_clearance_never_makes_device_operational():
     device = UnverifiedDevice(DeviceDescriptor(id="fixture"))
     await device.connect()
