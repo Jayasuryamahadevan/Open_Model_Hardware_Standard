@@ -400,6 +400,7 @@ class Device(abc.ABC):
         clean = cmd.validate_args(args)
 
         if ctx.dry_run:
+            await self._check_preconditions(cmd)
             sim = await self.simulate(feature, command, clean)
             return {"dry_run": True, **sim.model_dump()}
 
