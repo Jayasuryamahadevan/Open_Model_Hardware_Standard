@@ -22,6 +22,7 @@ from .errors import (
     CapabilityNotFound,
     DeviceNotReady,
     LabBenchError,
+    ValidationError,
 )
 
 
