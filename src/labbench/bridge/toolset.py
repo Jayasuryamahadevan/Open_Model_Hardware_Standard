@@ -267,8 +267,14 @@ def register_tools(router: Router, gateway: Any) -> None:
         dev = gateway.device(device)
         if not dev.descriptor.simulated and not ctx.actor.startswith("human:"):
             raise ValidationError("physical device reconnection requires an authenticated human")
-        await dev.connect()
-        return {"device": device, "state": dev.state.value}
+        status = await gateway.devices.connect_one(device, manual=True)
+        if status.startswith("error:"):
+            raise DeviceNotReady(status, device=device)
+        gateway.ledger.log(
+            "device_connect", actor=ctx.actor, device_id=device,
+            payload={"result": status},
+        )
+        return {"device": device, "state": status}
 
     @router.method("device.initialize")
     async def device_initialize(
@@ -305,6 +311,7 @@ def register_tools(router: Router, gateway: Any) -> None:
         dev = gateway.device(device)
         previous = dev.fault
         await dev.clear_fault()
+        gateway.devices.quarantined.pop(device, None)
         gateway.ledger.log(
             "note", actor=ctx.actor, device_id=device, reason=reason,
             payload={"cleared_fault": previous},
