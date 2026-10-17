@@ -9,6 +9,9 @@ manufacturing unsafe capabilities from a product string.
 from __future__ import annotations
 
 import asyncio
+import json
+import platform
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -125,11 +128,92 @@ async def scpi_identity(address: str, timeout_s: float = 2.0) -> dict[str, Any]:
     }
 
 
+def _native_query(command: list[str], timeout_s: float = 8.0) -> Any:
+    """Run one fixed, passive OS inventory command with an execution deadline."""
+    try:
+        result = subprocess.run(
+            command, capture_output=True, text=True, timeout=timeout_s, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    if result.returncode:
+        return {"error": result.stderr[:300] or f"exit status {result.returncode}"}
+    if len(result.stdout) > 4_000_000:
+        return {"error": "native inventory exceeded 4 MB"}
+    try:
+        return json.loads(result.stdout)
+    except (ValueError, UnicodeError):
+        return {"error": "native inventory was not valid JSON"}
+
+
+def _mac_usb_nodes(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+
+    def walk(nodes: list[dict[str, Any]]) -> None:
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            vendor = node.get("vendor_id", "")
+            product = node.get("product_id", "")
+            if vendor or product:
+                found.append({
+                    "source": "macos-system-profiler", "bus_path": node.get("_name", ""),
+                    "vendor_id": str(vendor), "product_id": str(product),
+                    "vendor": node.get("manufacturer"), "model": node.get("_name"),
+                    "serial": node.get("serial_num"), "control_status": "unconfigured",
+                    "identification": "usb_descriptor",
+                })
+            children = node.get("_items")
+            if isinstance(children, list):
+                walk(children)
+
+    walk(items)
+    return found
+
+
+def native_inventory(os_name: str | None = None) -> list[dict[str, Any]]:
+    """Enumerate native devices on Windows/macOS without opening control channels.
+
+    Linux sysfs and cross-platform pyserial/VISA are separately inventoried.
+    OS commands are fixed, bounded and never include agent-supplied fragments.
+    """
+    system = os_name or platform.system()
+    if system == "Darwin":
+        data = _native_query(["system_profiler", "SPUSBDataType", "-json"])
+        if isinstance(data, dict) and isinstance(data.get("SPUSBDataType"), list):
+            return _mac_usb_nodes(data["SPUSBDataType"])
+        return [{"source": "macos-system-profiler", "error": data.get("error", "unexpected schema")
+                 if isinstance(data, dict) else "unexpected response"}]
+    if system == "Windows":
+        command = [
+            "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+            ("Get-PnpDevice -PresentOnly | "
+             "Select-Object InstanceId,Class,FriendlyName,Manufacturer,Status | "
+             "ConvertTo-Json -Compress -Depth 3"),
+        ]
+        data = _native_query(command)
+        if isinstance(data, dict) and "error" in data:
+            return [{"source": "windows-pnp", "error": data["error"]}]
+        records = data if isinstance(data, list) else [data]
+        return [{
+            "source": "windows-pnp", "bus_path": str(entry.get("InstanceId", "")),
+            "class": entry.get("Class"), "vendor": entry.get("Manufacturer"),
+            "model": entry.get("FriendlyName"), "status": entry.get("Status"),
+            "control_status": "unconfigured", "identification": "pnp_descriptor",
+        } for entry in records if isinstance(entry, dict) and entry.get("InstanceId")]
+    return []
+
+
 async def discover_hardware(scpi_targets: list[str] | None = None,
                             *, sysfs: Path = Path("/sys/bus/usb/devices"),
                             serial_dir: Path = Path("/dev/serial/by-id")) -> dict[str, Any]:
     targets = list(dict.fromkeys(scpi_targets or []))
     network = await asyncio.gather(*(scpi_identity(target) for target in targets))
-    return {"usb": usb_inventory(sysfs, serial_dir),
-            "serial": serial_inventory(), "visa": visa_inventory(), "scpi": network,
+    native, serial, visa = await asyncio.gather(
+        asyncio.to_thread(native_inventory),
+        asyncio.to_thread(serial_inventory),
+        asyncio.to_thread(visa_inventory),
+    )
+    return {"usb": usb_inventory(sysfs, serial_dir), "native": native,
+            "serial": serial, "visa": visa, "scpi": network,
             "note": "Discovery is identification only. Commands require an installed, reviewed driver and safety profile."}
