@@ -151,7 +151,7 @@ class HttpApiDevice(Device):
             return response.json() if response.content else {}
         except asyncio.CancelledError:
             raise
-        except (TimeoutError, Exception) as exc:
+        except Exception as exc:
             if isinstance(exc, (TransportError, DeviceFault)):
                 raise
             raise TransportError(
