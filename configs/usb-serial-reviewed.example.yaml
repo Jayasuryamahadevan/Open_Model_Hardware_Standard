@@ -13,7 +13,6 @@ devices:
         serial_number: "EXAMPLE-SERIAL"
       baudrate: 9600
       timeout_s: 1
-      terminator: "\\n"
       identity_query: "*IDN?"
       identity_reply: "EXAMPLE,METER,EXAMPLE-SERIAL"
       features:
