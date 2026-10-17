@@ -257,6 +257,11 @@ class Device(abc.ABC):
     # -- lifecycle --------------------------------------------------------
 
     async def connect(self) -> None:
+        if self._fault is not None:
+            raise DeviceNotReady(
+                "a faulted device needs operator inspection and explicit fault clearance",
+                device=self.id, fault=self._fault,
+            )
         await self._set_state(DeviceState.CONNECTING)
         try:
             await self._connect()
@@ -313,7 +318,16 @@ class Device(abc.ABC):
 
     async def read(self, feature: str, name: str) -> TelemetrySample:
         _, prop = self.resolve_property(feature, name)
-        value = await self._read(feature, name)
+        timeout = self.config.get("read_timeout_s")
+        try:
+            value = (await asyncio.wait_for(self._read(feature, name), float(timeout))
+                     if timeout is not None else await self._read(feature, name))
+        except TimeoutError:
+            await self.fail(f"read timed out: {feature}.{name}; state uncertain")
+            raise DeviceNotReady(
+                f"read timeout on {self.id}.{feature}.{name}; human inspection required",
+                device=self.id,
+            ) from None
         return TelemetrySample(
             device_id=self.id, feature=feature, property=name,
             value=value, unit=prop.schema_.unit,
@@ -370,7 +384,26 @@ class Device(abc.ABC):
         try:
             if cmd.observable:
                 await self._set_state(DeviceState.BUSY, f"{feature}.{command}")
-            result = await self._invoke(feature, command, clean, ctx)
+            timeout = self.config.get("command_timeout_s")
+            if timeout is not None:
+                seconds = float(timeout)
+                if not 0.1 <= seconds <= 86400:
+                    raise ValidationError("command_timeout_s must be between 0.1 and 86400")
+                try:
+                    result = await asyncio.wait_for(
+                        self._invoke(feature, command, clean, ctx), timeout=seconds,
+                    )
+                except TimeoutError:
+                    await self.fail(
+                        f"{feature}.{command} timed out; physical state uncertain"
+                    )
+                    raise DeviceNotReady(
+                        f"{self.id}.{feature}.{command} timed out; "
+                        "operator inspection and physical stop may be necessary",
+                        device=self.id, state_uncertain=True,
+                    ) from None
+            else:
+                result = await self._invoke(feature, command, clean, ctx)
             return result if isinstance(result, dict) else {"value": result}
         except LabBenchError as exc:
             self._last_error = exc
