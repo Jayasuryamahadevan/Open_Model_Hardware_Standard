@@ -21,12 +21,11 @@ itself.
 
 `Credential` closes both: a site configures one token per identity, and the
 actor that reaches the ledger and the safety kernel is whichever credential's
-token matched, never a value the caller supplied. The legacy single
-`--token`/`LABBENCH_TOKEN` flag still works exactly as before -- a shared
-secret with a self-declared actor -- because that is still the right shape
-for a single-operator dev bench; it is superseded the moment any
-`credentials` are configured, so a site is never in both regimes without
-knowing it.
+token matched, never a value the caller supplied. The legacy single `--token`/`LABBENCH_TOKEN` flag still works
+as one shared authentication secret, but no longer accepts a caller-declared
+human identity: it maps to `agent:legacy-token`. Use named `credentials`
+with fixed human/agent actors for any workflow needing approval identity.
+Configured credentials override the legacy token.
 """
 
 from __future__ import annotations
