@@ -1,10 +1,11 @@
-"""Deterministic, simulated-only HCP/MCP integration smoke harness."""
+"""Hermetic simulated HCP/MCP smoke harness; never enumerate host hardware."""
 
 from __future__ import annotations
 
 import tempfile
 from pathlib import Path
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 from .core.registry import DeviceConfig, LabConfig
 from .gateway import Gateway
@@ -99,7 +100,14 @@ async def run_harness(config: LabConfig | None = None) -> dict[str, Any]:
 
             await check("modern discovery", modern_discover)
             await check("deterministic MCP schema catalog", modern_tools)
-            await check("read-only hardware analysis", analyze)
+            with patch(
+                "labbench.core.discovery.discover_hardware",
+                new_callable=AsyncMock,
+            ) as inventory:
+                inventory.return_value = {
+                    "usb": [], "native": [], "serial": [], "visa": [], "scpi": [],
+                }
+                await check("read-only hardware analysis", analyze)
             await check("verified simulated capabilities", capability)
             await check("legacy client handshake", legacy)
         finally:
