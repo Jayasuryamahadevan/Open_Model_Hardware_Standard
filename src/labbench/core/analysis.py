@@ -93,6 +93,20 @@ def build_analysis(
                 "USB identity alone does not expose a safe control API; install a device driver."
             ),
         ))
+    for item in inventory.get("native", []):
+        if "error" in item:
+            continue
+        address = item.get("bus_path")
+        if not address:
+            continue
+        endpoints.append(_endpoint(
+            item.get("source", "native"), address,
+            protocol="os-device-descriptor", probe="passive",
+            evidence={key: item.get(key) for key in (
+                "vendor_id", "product_id", "vendor", "model", "serial", "class", "status"
+            )},
+            next_step="Match this OS connection to an installed, reviewed device adapter.",
+        ))
     for item in inventory.get("serial", []):
         endpoints.append(_endpoint(
             "serial", item["port"], protocol="serial", probe="passive",
