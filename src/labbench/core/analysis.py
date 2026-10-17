@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import platform
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from ..bridge.schema import sanitise_name
@@ -29,7 +30,7 @@ def _endpoint(
     next_step: str,
 ) -> dict[str, Any]:
     return {
-        "id": hashlib.sha256(f"{source}\0{address}".encode("utf-8")).hexdigest()[:16],
+        "id": hashlib.sha256(f"{source}\0{address}".encode()).hexdigest()[:16],
         "source": source,
         "protocol": protocol,
         "address": address,
@@ -194,8 +195,8 @@ def build_analysis(
             "Use hardware.manual to inspect reviewed binding documentation.",
             "Use hardware.activate only for ready_to_activate bindings.",
             "Call tools/list again after activation to receive typed MCP commands.",
-            "Simulate supported actions when possible; obey approval decisions and "
-            "physical safety interlocks.",
+            ("Simulate supported actions when possible; obey approval decisions and "
+             "physical safety interlocks."),
         ],
         "limitations": [
             "Only hardware with an accessible host interface and implemented driver can be controlled.",
