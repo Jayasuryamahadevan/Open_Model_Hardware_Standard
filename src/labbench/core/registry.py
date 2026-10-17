@@ -207,7 +207,9 @@ class DeviceManager:
         descriptor = DeviceDescriptor(
             id=cfg.id,
             display_name=cfg.display_name or cfg.id,
-            kind=cfg.kind, vendor=cfg.vendor, model=cfg.model,
+            kind=cfg.kind,
+            vendor=cfg.vendor if cfg.driver.startswith("sim_") else "unknown",
+            model=cfg.model if cfg.driver.startswith("sim_") else "unknown",
             serial=cfg.serial if cfg.driver.startswith("sim_") else None,
             location=cfg.location, labels=cfg.labels,
             driver=cfg.driver,
