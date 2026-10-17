@@ -21,7 +21,6 @@ from labbench.protocol.mcp import MODERN_VERSION, mcp_router
 from labbench.protocol.mcp_http import register_mcp_http
 from labbench.protocol.router import Router, RpcContext
 
-
 META = {
     "io.modelcontextprotocol/protocolVersion": MODERN_VERSION,
     "io.modelcontextprotocol/clientCapabilities": {},
