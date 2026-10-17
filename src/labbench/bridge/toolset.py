@@ -24,7 +24,7 @@ from typing import Any
 
 from ..core.capability import Command, Feature
 from ..core.device import DeviceState
-from ..core.errors import ValidationError
+from ..core.errors import DeviceNotReady, ValidationError
 from ..protocol.router import Router, RpcContext
 from .schema import ToolSpec, emit
 
@@ -842,15 +842,6 @@ def tool_specs(gateway: Any) -> list[ToolSpec]:
                         "inventory-only and are never automatically activated.",
             parameters=obj({}), read_only=True, idempotent=True, hazard="none",
             tags=["discovery", "analysis"],
-        ),
-        ToolSpec(
-            name="hardware.discover",
-            description="Read-only laptop discovery: USB vendor/product/serial descriptors and "
-                        "*IDN? responses from SCPI endpoints explicitly listed in the lab "
-                        "config. Compares observed identity against reviewed binding rules. "
-                        "Call this when hardware is connected, before hardware.activate.",
-            parameters=obj({}), read_only=True, idempotent=True, hazard="none",
-            tags=["discovery"],
         ),
         ToolSpec(
             name="hardware.manual",
