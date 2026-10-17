@@ -45,6 +45,7 @@ wot                = "labbench.drivers.http_wot:WoTThing"
 sila2              = "labbench.drivers.sila2_adapter:Sila2Device"
 opcua_lads         = "labbench.drivers.opcua_lads:LadsDevice"
 opentrons          = "labbench.drivers.opentrons:OpentronsRobot"
+http_api           = "labbench.drivers.http_api:HttpApiDevice"
 
 [project.entry-points."labbench.memory"]
 sqlite     = "labbench.memory.sqlite_store:SqliteMemory"
