@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from labbench.cli import build_parser
-from labbench.core.analysis import build_analysis, mcp_control_name
+from labbench.core.analysis import _configured_endpoint, build_analysis, mcp_control_name
 from labbench.core.registry import DeviceConfig, LabConfig, ScpiBinding
 from labbench.gateway import Gateway
 from labbench.protocol.jsonrpc import Request
@@ -137,3 +137,22 @@ def test_analyze_cli_has_optional_config():
     assert args.config is None
     args = build_parser().parse_args(["analyze", "-c", "lab.yaml"])
     assert args.config == "lab.yaml"
+
+
+def test_configured_endpoint_redacts_credentials_and_query():
+    config = DeviceConfig(id="thing", driver="wot", settings={
+        "td_url": "https://alice:secret@iot.example:443/td?token=private#ignored",
+        "token": "do-not-return",
+    })
+    endpoint = _configured_endpoint(config)
+    assert endpoint is not None
+    assert endpoint["address"] == "https://iot.example:443/td"
+    assert "secret" not in str(endpoint)
+    assert "private" not in str(endpoint)
+
+
+def test_bad_url_port_does_not_crash_hardware_report():
+    config = DeviceConfig(id="thing", driver="wot", settings={
+        "td_url": "https://iot.example:not-a-number/td"
+    })
+    assert _configured_endpoint(config) is None
