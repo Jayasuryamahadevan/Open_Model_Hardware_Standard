@@ -57,7 +57,7 @@ async def run_harness(config: LabConfig | None = None) -> dict[str, Any]:
                 try:
                     await fn()
                     tests.append({"name": name, "passed": True})
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - harness reports all failed checks
                     tests.append({"name": name, "passed": False,
                                   "detail": f"{type(exc).__name__}: {exc}"})
 
