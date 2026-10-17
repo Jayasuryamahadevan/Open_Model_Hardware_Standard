@@ -37,6 +37,7 @@ LOG_FORMAT = "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
 _EXTRA_FOR_DRIVER = {
     "micromanager": "micromanager",
     "scpi": "scpi",
+    "serial_ascii": "serial",
     "sila2": "sila2",
     "opcua_lads": "opcua",
     "wot": "http",
