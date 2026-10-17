@@ -253,7 +253,8 @@ class Gateway:
         from .core.analysis import build_analysis
 
         inventory["analysis"] = build_analysis(
-            inventory, self.devices.all(), self.devices.quarantined
+            inventory, self.devices.all(), self.devices.quarantined,
+            {cfg.id: cfg for cfg in self.config.devices},
         )
         return inventory
 
