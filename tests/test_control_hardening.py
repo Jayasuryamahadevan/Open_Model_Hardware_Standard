@@ -9,12 +9,12 @@ from pathlib import Path
 import pytest
 
 from labbench.core.analysis import build_analysis
-from labbench.core.discovery import native_inventory
 from labbench.core.device import DeviceDescriptor, DeviceState
+from labbench.core.discovery import native_inventory
 from labbench.core.errors import DeviceNotReady, ValidationError
+from labbench.core.registry import DeviceConfig, LabConfig
 from labbench.drivers.http_api import HttpApiDevice
 from labbench.gateway import Gateway
-from labbench.core.registry import DeviceConfig, LabConfig
 from labbench.protocol.http import HttpRequest, HttpServer
 from labbench.protocol.mcp import mcp_router
 from labbench.protocol.mcp_http import _allowed_origin, register_mcp_http
