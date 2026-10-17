@@ -72,7 +72,7 @@ async def test_mcp_maps_calls_to_gateway_and_exposes_manual(tmp_path: Path):
         assert init["capabilities"]["tools"]
         tools = await call("tools/list")
         names = {tool["name"] for tool in tools["tools"]}
-        assert {"lab_describe", "hardware_discover", "device_invoke", "device_manual"} <= names
+        assert {"lab_describe", "hardware_analyze", "device_invoke", "device_manual"} <= names
         described = await call("tools/call", {"name": "device_describe",
                                                "arguments": {"device": "scope"}})
         assert described["structuredContent"]["descriptor"]["simulated"] is True
@@ -108,7 +108,7 @@ def test_mcp_stdio_subprocess_handshake(tmp_path: Path):
     assert proc.returncode == 0, proc.stderr
     replies = {reply["id"]: reply for reply in map(json.loads, proc.stdout.splitlines())}
     assert replies[1]["result"]["serverInfo"]["name"] == "labbench-hcp"
-    assert any(tool["name"] == "hardware_discover" for tool in replies[2]["result"]["tools"])
+    assert any(tool["name"] == "hardware_analyze" for tool in replies[2]["result"]["tools"])
 
 
 async def test_arm_wave_flow_through_mcp(tmp_path: Path):
