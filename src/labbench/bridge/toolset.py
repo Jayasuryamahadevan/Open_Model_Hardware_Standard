@@ -24,7 +24,7 @@ from typing import Any
 
 from ..core.capability import Command, Feature
 from ..core.device import DeviceState
-from ..core.errors import ValidationError
+from ..core.errors import DeviceNotReady, ValidationError
 from ..protocol.router import Router, RpcContext
 from .schema import ToolSpec, emit
 
@@ -267,8 +267,14 @@ def register_tools(router: Router, gateway: Any) -> None:
         dev = gateway.device(device)
         if not dev.descriptor.simulated and not ctx.actor.startswith("human:"):
             raise ValidationError("physical device reconnection requires an authenticated human")
-        await dev.connect()
-        return {"device": device, "state": dev.state.value}
+        status = await gateway.devices.connect_one(device, manual=True)
+        if status.startswith("error:"):
+            raise DeviceNotReady(status, device=device)
+        gateway.ledger.log(
+            "device_connect", actor=ctx.actor, device_id=device,
+            payload={"result": status},
+        )
+        return {"device": device, "state": status}
 
     @router.method("device.initialize")
     async def device_initialize(
@@ -305,6 +311,7 @@ def register_tools(router: Router, gateway: Any) -> None:
         dev = gateway.device(device)
         previous = dev.fault
         await dev.clear_fault()
+        gateway.devices.quarantined.pop(device, None)
         gateway.ledger.log(
             "note", actor=ctx.actor, device_id=device, reason=reason,
             payload={"cleared_fault": previous},
@@ -835,15 +842,6 @@ def tool_specs(gateway: Any) -> list[ToolSpec]:
                         "inventory-only and are never automatically activated.",
             parameters=obj({}), read_only=True, idempotent=True, hazard="none",
             tags=["discovery", "analysis"],
-        ),
-        ToolSpec(
-            name="hardware.discover",
-            description="Read-only laptop discovery: USB vendor/product/serial descriptors and "
-                        "*IDN? responses from SCPI endpoints explicitly listed in the lab "
-                        "config. Compares observed identity against reviewed binding rules. "
-                        "Call this when hardware is connected, before hardware.activate.",
-            parameters=obj({}), read_only=True, idempotent=True, hazard="none",
-            tags=["discovery"],
         ),
         ToolSpec(
             name="hardware.manual",

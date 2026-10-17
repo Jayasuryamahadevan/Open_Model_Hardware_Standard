@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .capability import Command, Feature, Hazard, Property
+from .capability import Command, Feature, Property
 from .errors import (
     CapabilityNotFound,
     DeviceNotReady,
@@ -258,6 +258,11 @@ class Device(abc.ABC):
     # -- lifecycle --------------------------------------------------------
 
     async def connect(self) -> None:
+        if self._state is not DeviceState.OFFLINE:
+            raise DeviceNotReady(
+                "device must be offline before connecting",
+                device=self.id, state=self._state.value,
+            )
         if self._fault is not None:
             raise DeviceNotReady(
                 "a faulted device needs operator inspection and explicit fault clearance",
@@ -266,6 +271,9 @@ class Device(abc.ABC):
         await self._set_state(DeviceState.CONNECTING)
         try:
             await self._connect()
+        except asyncio.CancelledError:
+            await self.fail("connect cancelled; identity and physical state uncertain")
+            raise
         except Exception as exc:
             await self.fail(f"connect failed: {exc}")
             raise
@@ -274,8 +282,13 @@ class Device(abc.ABC):
     async def disconnect(self) -> None:
         try:
             await self._disconnect()
-        finally:
-            await self._set_state(DeviceState.OFFLINE, "disconnected")
+        except asyncio.CancelledError:
+            await self.fail("disconnect cancelled; physical state uncertain")
+            raise
+        except Exception as exc:
+            await self.fail(f"disconnect failed: {exc}")
+            raise
+        await self._set_state(DeviceState.OFFLINE, "disconnected")
 
     async def initialize(self, ctx: ExecutionContext | None = None) -> None:
         """Home / calibrate. Many commands are gated behind this."""
@@ -283,6 +296,9 @@ class Device(abc.ABC):
         await self._set_state(DeviceState.INITIALIZING)
         try:
             await self._initialize(ctx or ExecutionContext())
+        except asyncio.CancelledError:
+            await self.fail("initialization cancelled; physical state uncertain")
+            raise
         except Exception as exc:
             await self.fail(f"initialize failed: {exc}")
             raise
@@ -297,8 +313,20 @@ class Device(abc.ABC):
         await self._set_state(DeviceState.FAULT, reason)
 
     async def clear_fault(self) -> None:
-        self._fault = None
-        await self._set_state(DeviceState.IDLE, "fault cleared")
+        """Release a fault for a *new verified connection*, never resume operation."""
+        if self._state is not DeviceState.FAULT:
+            raise DeviceNotReady(
+                "only faulted devices can be cleared",
+                device=self.id, state=self._state.value,
+            )
+        async with self._lock:
+            try:
+                await self._disconnect()
+            except Exception as exc:
+                await self.fail(f"fault clearance failed to disconnect: {exc}")
+                raise
+            self._fault = None
+            await self._set_state(DeviceState.OFFLINE, "fault cleared; reconnect required")
 
     async def estop(self, reason: str = "operator e-stop") -> None:
         """Halt everything now. Must be safe to call from any state.
@@ -370,11 +398,9 @@ class Device(abc.ABC):
         ctx = ctx or ExecutionContext()
         _, cmd = self.resolve(feature, command)
         clean = cmd.validate_args(args)
-        if cmd.hazard is not Hazard.NONE:
-            self._require_operational()
-        await self._check_preconditions(cmd)
 
         if ctx.dry_run:
+            await self._check_preconditions(cmd)
             sim = await self.simulate(feature, command, clean)
             return {"dry_run": True, **sim.model_dump()}
 
@@ -383,6 +409,8 @@ class Device(abc.ABC):
             await self._lock.acquire()
         prev_state = self._state
         try:
+            self._require_operational()
+            await self._check_preconditions(cmd)
             if cmd.observable:
                 await self._set_state(DeviceState.BUSY, f"{feature}.{command}")
             timeout = self.config.get("command_timeout_s")

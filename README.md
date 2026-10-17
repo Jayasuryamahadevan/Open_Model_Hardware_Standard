@@ -44,11 +44,32 @@ vendor's mouse.
 
 LabBench is that contract for lab instruments and AI agents.
 
+## Fast path: a working, safe MCP server
+
+```bash
+uv sync --extra dev
+uv run labbench harness
+uv run labbench analyze
+```
+
+`harness` runs an isolated simulated gateway and **never probes host hardware**.
+`analyze` reports host interfaces; it cannot infer a device's command language.
+To attach Claude or OpenCode, follow the
+[local MCP setup](docs/HCP-ONBOARDING.md) with
+`labbench serve -c configs/simulated-arm.yaml -t mcp`.
+
+By default HCP publishes a concise **core MCP tool profile** for discovery,
+inspection, simulation, controlled execution, jobs, and emergency stop.
+Advanced experiments, campaigns, memory and audit workflows remain available
+with `--mcp-profile full` or through the native JSON-RPC gateway. Physical
+devices must be identity-verified, and faults require a human-supervised
+disconnect, clearance and reconnect. See [the architecture and invariants](docs/ARCHITECTURE.md).
+
 ## Control-platform extensions
 
 The latest development includes bounded Windows/macOS host inventory,
-authenticated MCP Streamable HTTP (`labbench serve -t mcp-http`, the
-2025-11-25 profile), and a reviewed `http_api` adapter for documented
+authenticated MCP Streamable HTTP (`labbench serve -t mcp-http`,
+2026-07-28 core plus 2025 legacy compatibility), and a reviewed `http_api` adapter for documented
 REST/JSON hardware. Device command timeouts fault closed; physical fault
 clearance and reconnect are restricted to authenticated human operators.
 

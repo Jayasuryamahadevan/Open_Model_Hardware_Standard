@@ -207,8 +207,11 @@ class DeviceManager:
         descriptor = DeviceDescriptor(
             id=cfg.id,
             display_name=cfg.display_name or cfg.id,
-            kind=cfg.kind, vendor=cfg.vendor, model=cfg.model,
-            serial=cfg.serial, location=cfg.location, labels=cfg.labels,
+            kind=cfg.kind,
+            vendor=cfg.vendor if cfg.driver.startswith("sim_") else "unknown",
+            model=cfg.model if cfg.driver.startswith("sim_") else "unknown",
+            serial=cfg.serial if cfg.driver.startswith("sim_") else None,
+            location=cfg.location, labels=cfg.labels,
             driver=cfg.driver,
             simulated=cfg.driver.startswith("sim_"),
         )
@@ -284,10 +287,13 @@ class DeviceManager:
         await asyncio.gather(*(one(d) for d in self._devices.values()))
         return results
 
-    async def connect_one(self, device_id: str) -> str:
+    async def connect_one(self, device_id: str, *, manual: bool = False) -> str:
+        """One verification path for startup and operator-requested connections."""
         dev = self.get(device_id)
         cfg = self._configs.get(device_id)
-        if cfg is not None and not cfg.autoconnect:
+        if device_id in self.quarantined:
+            return f"error: device quarantined: {self.quarantined[device_id]}"
+        if cfg is not None and not cfg.autoconnect and not manual:
             return "skipped (autoconnect: false)"
         try:
             await dev.connect()

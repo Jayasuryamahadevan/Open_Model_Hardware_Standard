@@ -98,7 +98,7 @@ async def _serve(args: argparse.Namespace) -> int:
     if args.transport == "mcp":
         from .protocol.mcp import serve_mcp_stdio
         try:
-            await serve_mcp_stdio(gateway)
+            await serve_mcp_stdio(gateway, profile=args.mcp_profile)
             return 0
         finally:
             await gateway.close()
@@ -119,7 +119,8 @@ async def _serve(args: argparse.Namespace) -> int:
             credentials=credentials, allow_origin="", server_name=f"labbench-mcp/{__version__}",
         )
         register_mcp_http(
-            server, mcp_router(gateway), allowed_origins=args.mcp_allowed_origin,
+            server, mcp_router(gateway, profile=args.mcp_profile),
+            allowed_origins=args.mcp_allowed_origin,
         )
         try:
             await server.start()
@@ -675,6 +676,10 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--host", default="127.0.0.1",
                        help="Binding off-loopback requires --token.")
     serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument(
+        "--mcp-profile", choices=("core", "full"), default="core",
+        help="core exposes essential hardware tools; full enables all workflows.",
+    )
     serve.add_argument(
         "--mcp-allowed-origin", action="append", default=[],
         help="Trusted browser Origin for mcp-http (repeatable; none allowed by default).",

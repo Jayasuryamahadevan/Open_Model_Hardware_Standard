@@ -85,10 +85,11 @@ headers. Prefer configured named `credentials` with fixed actor identities
 over the legacy shared token if human approvals are enabled. Do not expose
 `/rpc` or `/methods` through the proxy.
 
-The `mcp-http` transport implements the **2025-11-25 stateless session
-profile** of MCP Streamable HTTP: one JSON-RPC POST per message, application/json
-responses, 202 for notifications, GET and DELETE return 405. It does not offer
-GET SSE, does not issue sessions, and does not advertise 2026-07-28 semantics.
+The `mcp-http` transport implements the **2026-07-28 core stateless JSON**
+request/response surface plus legacy `2025-11-25` handshakes. It accepts one
+JSON-RPC POST per message, returns JSON results and 202 for notifications,
+and responds 405 to GET/DELETE. It does not provide streaming subscriptions,
+MCP Tasks, MRTR or OAuth authorization and must not advertise these features.
 An Origin header is rejected unless explicitly added using a repeated
 `--mcp-allowed-origin https://trusted.example` flag. Browser requests
 without a matching Origin are rejected; CLI clients ordinarily omit Origin.

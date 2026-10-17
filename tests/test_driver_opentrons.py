@@ -90,10 +90,10 @@ class TestRunLifecycle:
         assert result["run_id"] == "run123"
         assert (await robot.read("RunControl", "run_id")).value == "run123"
 
-    async def test_create_run_requires_a_protocol(self):
-        dev = OpentronsRobot(DeviceDescriptor(id="ot2"), host="x")
+    async def test_create_run_requires_a_protocol(self, robot):
+        robot.default_protocol_id = None
         with pytest.raises(ValidationError):
-            await dev.invoke("RunControl", "create_run", {})
+            await robot.invoke("RunControl", "create_run", {})
 
     async def test_play_polls_until_terminal(self, robot):
         await robot.invoke("RunControl", "create_run", {})
