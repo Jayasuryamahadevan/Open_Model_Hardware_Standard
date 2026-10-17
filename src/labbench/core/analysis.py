@@ -58,8 +58,12 @@ def _configured_endpoint(config: Any) -> dict[str, str] | None:
             netloc = parts.hostname
             if ":" in netloc:
                 netloc = f"[{netloc}]"
-            if parts.port is not None:
-                netloc += f":{parts.port}"
+            try:
+                port = parts.port
+            except ValueError:
+                return None
+            if port is not None:
+                netloc += f":{port}"
             value = urlunsplit((parts.scheme, netloc, parts.path, "", ""))
         else:
             return None
